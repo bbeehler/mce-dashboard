@@ -1,24 +1,32 @@
 # MCE Executive Dashboard
 
-One page for AIA Canada's Marketing, Communications and Events results across AIA Canada, CCIF, YPA and I-CAR.
+Monthly Marketing, Communications and Engagement (Events) results for AIA Canada, CCIF, YPA and I-CAR, with month-over-month and year-over-year comparisons.
 
-Site: https://bbeehler.github.io/mce-dashboard/
+- Dashboard: https://bbeehler.github.io/mce-dashboard/
+- Upload a month: https://bbeehler.github.io/mce-dashboard/upload.html
 
-## Sections and sources
+## How it works
 
-| Section | Source | How it updates |
-|---|---|---|
-| Events | PheedLoop REST API | Every 15 minutes (once connected) |
-| Marketing: website | GA4 Data API | Daily (once connected) |
-| Communications: email | Insightly Marketing exports | Monthly export added to `data/` (Insightly's API has no marketing email data) |
-| Communications: send plan | `eblast-calendar/data.json` | Live, read from the eBlast calendar |
-| Communications: social | Social scheduling tool | Daily (once connected) |
+1. Each month, fill in `template/MCE-monthly-data-template.xlsx` (also downloadable from the upload page). Totals only: no personal information.
+2. Sign in on the upload page with an approved email (a one-time link is emailed to you), choose the file, check the preview and save.
+3. The numbers are stored in the **MCE Dashboard** Supabase project and the dashboard shows them immediately. Uploading a month again replaces the numbers it contains; blank cells never overwrite saved numbers.
 
-Each file in `data/` carries a `status`: `sample` (placeholder numbers), `audit` (2026 email send audit) or `live`. The page labels every section accordingly.
+The send plan card reads the live eBlast calendar (`../eblast-calendar/data.json`).
 
-## Secrets (Settings → Secrets and variables → Actions)
+## Supabase tables
 
-- `PHEEDLOOP_API_KEY` (and `PHEEDLOOP_API_SECRET` / `PHEEDLOOP_ORG` if PheedLoop issues them)
-- `GA4_CREDENTIALS`: the service account JSON key; the service account needs Viewer access on each GA4 property
+| Table | Holds |
+|---|---|
+| `metric_values` | One row per month × source × brand × metric (× breakdown such as channel or platform) |
+| `events` | Event code, name, brand, dates, capacity, targets, and last year's event code |
+| `event_snapshots` | Registrations, revenue and attendance at each month end, per event |
+| `targets` | Annual targets by stream, brand and metric |
+| `admins` | Emails allowed to upload |
+| `uploads` | Upload history |
 
-Settings → Pages → Source must be **GitHub Actions**.
+Anyone can read the totals; only emails in `admins` can write (row level security).
+
+To approve another uploader, run in the Supabase SQL editor:
+`insert into admins (email) values ('name@aiacanada.com');`
+
+January to September 2026 email figures were loaded from the 2026 email send audit.

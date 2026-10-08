@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Upload Month · MCE Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--page:#f3f4f7;--surface:#fff;--ink:#0f1730;--ink-2:#4a5368;--muted:#868d9c;--grid:#e6e8ee;--ring:rgba(15,23,48,.09);--wash:#f6f7fa;--brand:#1b2a5a;--brand-2:#9fb4e6;--red:#e31b4b;--accent:#2a78d6;--good:#006300;--good-bg:#e6f5e6;--bad:#b42323;--bad-bg:#fbe5e5;--warn-bg:#fff4dc;--warn:#7a5300;
+--display:"Archivo","Helvetica Neue",Arial,sans-serif;--body:"Public Sans","Helvetica Neue",Arial,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--page:#0d0f14;--surface:#171a21;--ink:#f2f4f8;--ink-2:#c3c8d3;--muted:#8b92a1;--grid:#262a33;--ring:rgba(255,255,255,.09);--wash:#1d212a;--brand:#141f45;--accent:#3987e5;--good:#3fcf3f;--good-bg:#14301a;--bad:#ff7b7b;--bad-bg:#3d1a1a;--warn-bg:#3a2e10;--warn:#f0c46a;color-scheme:dark}}
+:root[data-theme="dark"]{--page:#0d0f14;--surface:#171a21;--ink:#f2f4f8;--ink-2:#c3c8d3;--muted:#8b92a1;--grid:#262a33;--ring:rgba(255,255,255,.09);--wash:#1d212a;--brand:#141f45;--accent:#3987e5;--good:#3fcf3f;--good-bg:#14301a;--bad:#ff7b7b;--bad-bg:#3d1a1a;--warn-bg:#3a2e10;--warn:#f0c46a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 var(--body);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+.band{background:var(--brand);color:#fff;border-bottom:4px solid var(--red)}
+.wrap{max-width:860px;margin:0 auto;padding-inline:24px}
+.band .wrap{padding-block:20px 18px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brand-2);font-weight:600}
+h1{font-family:var(--display);font-weight:800;font-size:28px;margin:4px 0 0}
+.band a{color:var(--brand-2);font-size:13px}
+main.wrap{display:grid;gap:16px;padding-block:20px 48px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:20px;display:grid;gap:12px}
+h2{font-family:var(--display);font-size:18px;margin:0}
+p{margin:0;max-width:68ch}
+.muted{color:var(--muted);font-size:13px}
+label{font-weight:600;font-size:13px}
+input[type=email],input[type=month]{font:inherit;padding:8px 10px;border:1px solid var(--grid);border-radius:6px;background:var(--surface);color:var(--ink);min-width:240px}
+input[type=file]{font:inherit}
+button,.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+button.ghost,.btn.ghost{background:transparent;color:var(--accent)}
+button[disabled]{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.msg{padding:10px 12px;border-radius:8px;font-size:13px}
+.msg.ok{background:var(--good-bg);color:var(--good)}
+.msg.err{background:var(--bad-bg);color:var(--bad)}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--wash);border-radius:8px;padding:10px 12px}
+.stat b{font-family:var(--display);font-size:22px;display:block}
+.stat span{font-size:12px;color:var(--ink-2)}
+.tbl{overflow-x:auto;max-height:340px;border:1px solid var(--grid);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:var(--wash);text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:6px 8px}
+td{padding:6px 8px;border-top:1px solid var(--grid)}
+td.n{text-align:right}
+ol{margin:0;padding-left:20px;display:grid;gap:4px}
+@media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month]{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header class="band"><div class="wrap">
+  <div><div class="eyebrow">MCE Executive Dashboard</div><h1>Upload Month</h1></div>
+  <a href="./">← Back to the dashboard</a>
+</div></header>
+
+<main class="wrap">
+  <section class="card">
+    <h2>1. Fill in the template</h2>
+    <p>One workbook per month, with tabs for Marketing, Communications and Events. Fill in the yellow cells only and leave blanks where you don't have a number.</p>
+    <div class="row"><a class="btn ghost" href="template/MCE-monthly-data-template.xlsx" download>Download the template</a><span class="muted">Excel, about 20 KB</span></div>
+  </section>
+
+  <section class="card" id="signin">
+    <h2>2. Sign in</h2>
+    <div id="signedOut">
+      <p>Enter your email and we'll send you a sign-in link. Only approved emails can save data.</p>
+      <form id="loginForm" class="row" style="margin-top:10px">
+        <label for="email" hidden>Email</label>
+        <input id="email" type="email" required placeholder="you@aiacanada.com" autocomplete="email">
+        <button type="submit" id="sendLink">Email me a sign-in link</button>
+      </form>
+    </div>
+    <div id="signedIn" hidden class="row"><span id="who"></span><button class="ghost" id="signOut" type="button">Sign out</button></div>
+    <div id="authMsg"></div>
+  </section>
+
+  <section class="card" id="uploadCard" hidden>
+    <h2>3. Upload and check</h2>
+    <div class="row">
+      <label for="file">Workbook</label>
+      <input id="file" type="file" accept=".xlsx,.xls">
+    </div>
+    <div class="row">
+      <label for="month">Reporting month</label>
+      <input id="month" type="month">
+      <span class="muted">Read from the workbook; change it here if needed.</span>
+    </div>
+    <div id="parseMsg"></div>
+    <div id="preview" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="tbl"><table id="previewTable"></table></div>
+    </div>
+    <div class="row"><button id="save" disabled type="button">Save</button><span class="muted" id="saveHint">Upload a workbook to continue.</span></div>
+    <div id="saveMsg"></div>
+  </section>
+
+  <section class="card">
+    <h2>Recent uploads</h2>
+    <div id="history" class="muted">Sign in to see upload history.</div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const SUPABASE_URL="https://cyeirmvdstdhcbuyghvv.supabase.co";
+const SUPABASE_KEY="sb_publishable_PK9ID4XPE7qWUTsqpGtgrw_5-njCD0e";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=n=>n==null||n===""?"–":Number(n).toLocaleString("en-CA");
+const msg=(id,kind,text)=>{$(id).innerHTML=text?`<div class="msg ${kind}">${text}</div>`:""};
+const monthLabel=p=>new Date(p+"T12:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"});
+let parsed=null, isAdmin=false, user=null;
+
+/* ---------- auth ---------- */
+async function refreshAuth(){
+  const {data:{session}}=await sb.auth.getSession();
+  user=session?.user||null;
+  $("signedOut").hidden=!!user; $("signedIn").hidden=!user;
+  if(!user){$("uploadCard").hidden=true;return}
+  const {data,error}=await sb.rpc("is_admin");
+  isAdmin=!error&&data===true;
+  $("who").innerHTML=`Signed in as <b>${esc(user.email)}</b>`;
+  if(!isAdmin){msg("authMsg","warn","This email can view the dashboard but isn't approved to upload. Ask Brian to add it.");$("uploadCard").hidden=true;return}
+  msg("authMsg","","");$("uploadCard").hidden=false;loadHistory();
+}
+$("loginForm").addEventListener("submit",async e=>{
+  e.preventDefault();$("sendLink").disabled=true;
+  const {error}=await sb.auth.signInWithOtp({email:$("email").value.trim(),options:{emailRedirectTo:location.href.split("#")[0]}});
+  $("sendLink").disabled=false;
+  msg("authMsg",error?"err":"ok",error?`The sign-in link didn't send: ${esc(error.message)}`:"Check your inbox for a sign-in link from Supabase. Open it on this device; it brings you back here signed in.");
+});
+$("signOut").onclick=async()=>{await sb.auth.signOut();refreshAuth()};
+sb.auth.onAuthStateChange(()=>refreshAuth());
+
+/* ---------- parsing ---------- */
+function toMonth(v){
+  if(v==null||v==="")return null;
+  if(v instanceof Date)return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}`;
+  if(typeof v==="number"){const d=XLSX.SSF.parse_date_code(v);return d?`${d.y}-${String(d.m).padStart(2,"0")}`:null}
+  const m=String(v).trim().match(/^(\d{4})[-/ ](\d{1,2})/);return m?`${m[1]}-${m[2].padStart(2,"0")}`:null;
+}
+function toDate(v){
+  if(v==null||v==="")return null;
+  if(v instanceof Date)return v.toISOString().slice(0,10);
+  if(typeof v==="number"){const d=XLSX.SSF.parse_date_code(v);return d?`${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`:null}
+  const m=String(v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);return m?`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`:null;
+}
+function num(v){if(v==null||v==="")return null;const n=typeof v==="number"?v:Number(String(v).replace(/[$,\s]/g,""));return Number.isFinite(n)?n:NaN}
+
+function parseWorkbook(wb){
+  const out={month:null,metrics:[],events:[],problems:[]};
+  const ins=wb.Sheets["Instructions"];
+  if(ins)out.month=toMonth(ins["B4"]?.v);
+  for(const name of ["Marketing","Communications"]){
+    const ws=wb.Sheets[name];if(!ws){out.problems.push(`The ${name} tab is missing.`);continue}
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    rows.slice(4).forEach((r,i)=>{
+      const [section,brand,label,breakdown,value,stream,source,metric,dimension]=r;
+      if(!stream||!metric)return;
+      const v=num(value);if(v==null)return;
+      if(Number.isNaN(v)||v<0){out.problems.push(`${name} row ${i+5} (${brand} · ${label}${breakdown?" · "+breakdown:""}): “${value}” isn't a number.`);return}
+      out.metrics.push({stream,source,brand:brand||"All",metric,dimension:dimension||"",value:v,_label:`${label}${breakdown?" · "+breakdown:""}`,_tab:name});
+    });
+  }
+  const ev=wb.Sheets["Events"];
+  if(ev){
+    const rows=XLSX.utils.sheet_to_json(ev,{header:1,raw:true,defval:null});
+    rows.slice(4).forEach((r,i)=>{
+      const [code,name,brand,start,end,cap,tReg,tRev,prior,regs,rev,att]=r;
+      if(r.every(x=>x==null||x===""))return;
+      const row=i+5;
+      if(!code||!name){out.problems.push(`Events row ${row}: needs an event code and name.`);return}
+      const e={code:String(code).trim(),name:String(name).trim(),brand:brand||"AIA Canada",start_date:toDate(start),end_date:toDate(end),capacity:num(cap),target_registrations:num(tReg),target_revenue:num(tRev),prior_code:prior?String(prior).trim():null,registrations:num(regs),revenue:num(rev),attendance:num(att)};
+      if(!e.start_date){out.problems.push(`Events row ${row} (${e.code}): start date is missing or not YYYY-MM-DD.`);return}
+      if(e.registrations==null){out.problems.push(`Events row ${row} (${e.code}): registrations to date is blank.`);return}
+      for(const k of ["capacity","target_registrations","target_revenue","registrations","revenue","attendance"])if(Number.isNaN(e[k])){out.problems.push(`Events row ${row} (${e.code}): ${k.replace(/_/g," ")} isn't a number.`);return}
+      out.events.push(e);
+    });
+  }
+  return out;
+}
+
+$("file").addEventListener("change",async()=>{
+  const f=$("file").files[0];parsed=null;$("preview").hidden=true;$("save").disabled=true;msg("saveMsg","","");
+  if(!f)return;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true});
+    parsed=parseWorkbook(wb);parsed.filename=f.name;
+  }catch(e){msg("parseMsg","err","That file couldn't be read as an Excel workbook. Use the template from step 1.");return}
+  if(parsed.month)$("month").value=parsed.month;
+  const n=parsed.metrics.length+parsed.events.length;
+  if(parsed.problems.length)msg("parseMsg","err",`<b>Fix these before saving:</b><ol>${parsed.problems.map(p=>`<li>${esc(p)}</li>`).join("")}</ol>`);
+  else if(!n)msg("parseMsg","warn","The workbook has no numbers filled in yet.");
+  else msg("parseMsg","","");
+  renderPreview();
+});
+$("month").addEventListener("input",renderPreview);
+
+function renderPreview(){
+  if(!parsed)return;
+  const by=t=>parsed.metrics.filter(m=>m._tab===t).length;
+  $("stats").innerHTML=[["Marketing",by("Marketing")],["Communications",by("Communications")],["Events",parsed.events.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k} ${k==="Events"?"rows":"numbers"}</span></div>`).join("");
+  const rows=[...parsed.metrics.map(m=>[m._tab,m.brand,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",e.brand,`${e.name} (${e.code}) · registrations`,fmt(e.registrations)])];
+  $("previewTable").innerHTML=`<thead><tr><th>Tab</th><th>Brand</th><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="n">${esc(r[3])}</td></tr>`).join("")}</tbody>`;
+  $("preview").hidden=!rows.length;
+  const month=$("month").value,ok=!!month&&!parsed.problems.length&&rows.length>0;
+  $("save").disabled=!ok;
+  $("save").textContent=month?`Save ${monthLabel(month+"-01")}`:"Save";
+  $("saveHint").textContent=!month?"Choose the reporting month.":parsed.problems.length?"Fix the problems above, then upload the file again.":rows.length?`${rows.length} numbers will be saved. Numbers already saved for other metrics in this month stay as they are.`:"Nothing to save yet.";
+}
+
+/* ---------- save ---------- */
+$("save").onclick=async()=>{
+  const period=$("month").value+"-01";
+  $("save").disabled=true;msg("saveMsg","warn","Saving…");
+  try{
+    if(parsed.metrics.length){
+      const rows=parsed.metrics.map(({_label,_tab,...m})=>({...m,period}));
+      const {error}=await sb.from("metric_values").upsert(rows,{onConflict:"period,source,brand,metric,dimension"});
+      if(error)throw error;
+    }
+    for(const e of parsed.events){
+      const ev={code:e.code,name:e.name,brand:e.brand,start_date:e.start_date};
+      for(const k of ["end_date","capacity","target_registrations","target_revenue","prior_code"])if(e[k]!=null)ev[k]=e[k];
+      let {error}=await sb.from("events").upsert(ev,{onConflict:"code"});if(error)throw error;
+      const snap={event_code:e.code,period,registrations:e.registrations};
+      if(e.revenue!=null)snap.revenue=e.revenue;if(e.attendance!=null)snap.attendance=e.attendance;
+      ({error}=await sb.from("event_snapshots").upsert(snap,{onConflict:"event_code,period"}));if(error)throw error;
+    }
+    await sb.from("uploads").insert({period,uploaded_by:user.email,filename:parsed.filename,rows_written:parsed.metrics.length+parsed.events.length});
+    msg("saveMsg","ok",`Saved ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see it.`);
+    loadHistory();
+  }catch(err){
+    msg("saveMsg","err",`Nothing after the error was saved: ${esc(err.message||err)}. Try again; saving the same month twice is safe.`);
+  }
+  $("save").disabled=false;
+};
+
+async function loadHistory(){
+  const {data,error}=await sb.from("uploads").select("period,uploaded_at,uploaded_by,filename,rows_written").order("uploaded_at",{ascending:false}).limit(12);
+  if(error||!data){$("history").textContent="Upload history isn't available.";return}
+  $("history").innerHTML=data.length?`<div class="tbl"><table><thead><tr><th>Month</th><th>Uploaded</th><th>File</th><th style="text-align:right">Numbers</th></tr></thead><tbody>${data.map(u=>`<tr><td>${monthLabel(u.period)}</td><td>${new Date(u.uploaded_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</td><td>${esc(u.filename||"")}</td><td class="n">${fmt(u.rows_written)}</td></tr>`).join("")}</tbody></table></div>`:"No uploads yet.";
+}
+refreshAuth();
+</script>
+</body>
+</html>

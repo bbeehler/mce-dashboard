@@ -1,14 +1,12 @@
-name: Refresh and publish
+name: Publish
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes (GitHub may run it a few minutes late)
   workflow_dispatch:
   push:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -25,14 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Data pulls for PheedLoop, GA4 and social are added here as each source is connected.
-
       - name: Build the site
         run: |
           mkdir -p _site
-          cp -r index.html data robots.txt .nojekyll _site/
-          rm -rf _site/data/_probe
-          echo "{\"checked\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > _site/checked.json
+          cp -r index.html upload.html template robots.txt .nojekyll _site/
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

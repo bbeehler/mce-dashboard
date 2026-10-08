@@ -75,7 +75,7 @@ h3 .sub{font-weight:400;color:var(--muted)}
 .note{font-size:12px;color:var(--muted);margin:8px 0 0}
 
 /* KPI tiles */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .kpi{display:grid;gap:6px;align-content:start}
 .kpi .top{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .kpi .k{font-size:12px;color:var(--ink-2);font-weight:500}
@@ -155,6 +155,27 @@ footer p{margin:0}
 @media (max-width:900px){.cols{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
 @media (max-width:560px){.wrap{padding-inline:16px}.band .meta{text-align:left}.kpi .v{font-size:26px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Monthly dashboard additions */
+.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.controls label{font-size:12px;color:var(--brand-2);display:flex;flex-direction:column;gap:3px}
+.controls select{font:inherit;font-size:13.5px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 8px}
+.controls select option{color:#0f1730}
+.controls .upl{align-self:flex-end;color:#fff;font-size:13px;font-weight:600;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:6px 12px;text-decoration:none}
+.controls .upl:hover{background:rgba(255,255,255,.1)}
+.stream{display:grid;gap:12px}
+.stream .sec-head{margin:6px 0 0;border-bottom:2px solid var(--ink);padding-bottom:6px}
+.sub-h{font-size:12.5px;color:var(--muted)}
+.chg{font-weight:600}
+.chg.none{color:var(--muted);font-weight:400}
+.cc{font-size:11px;color:var(--muted);white-space:nowrap;margin-top:2px}
+.kpi .d{font-size:11.5px}
+.nodata{font-family:var(--body);font-size:14px;font-weight:500;color:var(--muted)}
+.kpi.empty{background:var(--wash)}
+.empty-note{color:var(--muted);font-size:13px;margin:6px 0;max-width:60ch}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px;vertical-align:middle}
+.src.link{text-decoration:none;border-style:dashed;color:var(--s1)}
+.muted{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -164,74 +185,52 @@ footer p{margin:0}
       <div class="eyebrow">AIA Canada · CCIF · YPA · I-CAR</div>
       <h1>MCE Executive Dashboard</h1>
     </div>
-    <div class="meta">Marketing, Communications and Events<br><span id="asof">Loading…</span></div>
+    <div class="controls">
+      <label>Month <select id="monthSel"></select></label>
+      <label>Brand <select id="brandSel"><option value="">All brands</option><option>AIA Canada</option><option>CCIF</option><option>YPA</option><option>I-CAR</option></select></label>
+      <a class="upl" href="upload.html">Upload month</a>
+    </div>
   </div>
 </header>
 
-<main class="wrap">
-  <div class="sources" id="sources"></div>
-
+<main class="wrap" id="main">
+  <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
 
-  <section class="card" id="eventsCard" aria-labelledby="evH">
-    <div class="sec-head"><h2 id="evH">Events</h2><span id="evTag"></span></div>
-    <div class="tblwrap"><table id="evTable"></table></div>
-    <p class="note" id="evNote"></p>
+  <section class="stream" aria-labelledby="mkH">
+    <div class="sec-head"><h2 id="mkH">Marketing</h2><span class="sub-h">Website, from GA4</span></div>
+    <div class="cols">
+      <div class="card"><h3>Website sessions by brand <span class="sub">· last 13 months</span></h3><div id="webChart"></div><div class="legend" id="webLegend"></div></div>
+      <div class="card"><h3>Where visits came from <span class="sub" id="chanSub"></span></h3><div class="hbars" id="channels"></div></div>
+    </div>
+    <div class="card"><h3>Website by brand <span class="sub" id="webTblSub"></span></h3><div class="tblwrap"><table class="mini" id="webTable"></table></div></div>
   </section>
 
-  <div class="cols">
-    <section class="stack" aria-labelledby="mkH">
-      <div class="sec-head" style="margin:0"><h2 id="mkH">Marketing</h2><span id="webTag"></span></div>
-      <div class="card" id="webCard">
-        <h3>Website sessions by brand <span class="sub">· weekly, last 12 weeks</span></h3>
-        <div id="webChart"></div>
-        <div class="legend" id="webLegend"></div>
-      </div>
-      <div class="card" id="chanCard">
-        <h3>Where visits come from <span class="sub">· last 30 days, all brands</span></h3>
-        <div class="hbars" id="channels"></div>
-      </div>
-      <div class="card" id="pagesCard">
-        <h3>Event pages <span class="sub">· last 30 days</span></h3>
-        <div class="tblwrap"><table class="mini" id="pages"></table></div>
-      </div>
-    </section>
+  <section class="stream" aria-labelledby="cmH">
+    <div class="sec-head"><h2 id="cmH">Communications</h2><span class="sub-h">Email from Insightly, social from your scheduling tool</span></div>
+    <div class="cols">
+      <div class="card"><h3>Broad emails to the main member list <span class="sub">· per month</span></h3><div id="loadChart"></div>
+        <div class="legend"><span><i class="sw" style="--c:var(--seq)"></i>Within cap</span><span><i class="sw" style="--c:var(--crit)"></i>Over cap</span><span><i class="dash" style="--c:var(--ink-2)"></i>About 9 a month</span></div></div>
+      <div class="card"><h3>Email open and click rates <span class="sub">· last 13 months</span></h3><div id="rateChart"></div><div class="legend" id="rateLegend"></div></div>
+    </div>
+    <div class="card"><h3>Email by brand <span class="sub" id="emailSub"></span></h3><div class="tblwrap"><table class="mini" id="emailTable"></table></div></div>
+    <div class="cols">
+      <div class="card"><h3>Social by platform <span class="sub" id="socialSub"></span></h3><div class="tblwrap"><table class="mini" id="socialTable"></table></div></div>
+      <div class="card"><h3>Send plan, next 8 weeks <span class="sub">· live from the eBlast calendar</span></h3><div id="discChart"></div><p class="note" id="discNote"></p></div>
+    </div>
+  </section>
 
-    <section class="stack" aria-labelledby="cmH">
-      <div class="sec-head" style="margin:0"><h2 id="cmH">Communications</h2><span id="emailTag"></span></div>
-      <div class="card" id="loadCard">
-        <h3>Broad emails to the main list <span class="sub">· per month, 2026</span></h3>
-        <div id="loadChart"></div>
-        <div class="legend"><span><i class="sw" style="--c:var(--seq)"></i>Within cap</span><span><i class="sw" style="--c:var(--crit)"></i>Over cap</span><span><i class="dash" style="--c:var(--ink-2)"></i>Monthly cap, about 9</span></div>
-      </div>
-      <div class="card" id="benchCard">
-        <h3>Email performance against peers <span class="sub">· 2026 to date</span></h3>
-        <div class="bench" id="bench"></div>
-      </div>
-      <div class="card" id="catCard">
-        <h3>Open rate by email type <span class="sub">· 2026 to date</span></h3>
-        <div class="hbars" id="cats"></div>
-        <div class="legend"><span><i class="sw" style="--c:var(--seq)"></i>Content</span><span><i class="tex"></i>Registration or sponsorship ask</span></div>
-      </div>
-      <div class="card" id="discCard">
-        <h3>Send plan, next 8 weeks <span class="sub">· broad sends booked per week, from the eBlast calendar</span></h3>
-        <div id="discChart"></div>
-        <p class="note" id="discNote"></p>
-      </div>
-      <div class="card" id="socialCard">
-        <h3>Social <span class="sub">· last 30 days</span></h3>
-        <div class="tblwrap"><table class="mini" id="social"></table></div>
-      </div>
-    </section>
-  </div>
+  <section class="stream" aria-labelledby="enH">
+    <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h">Events, from PheedLoop</span></div>
+    <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
+  </section>
 
   <footer>
-    <p>Sections marked <span class="tag sample">Sample</span> show placeholder numbers until their source is connected: PheedLoop for events, GA4 for the website, and the social scheduling tool. <span class="tag audit">Audit</span> figures come from the 2026 email send audit (Jan 6 to Oct 2, 2026) and will extend with monthly Insightly exports. <span class="tag live">Live</span> sections read current data.</p>
-    <p>“Broad” means a send to 1,000 or more people on the main AIA Canada list. Caps follow the audit: two broad sends a week and about nine a month per member.</p>
+    <p>Each month's numbers are uploaded from the monthly template on the <a href="upload.html">Upload month</a> page and stored in Supabase. MoM compares with the previous month and YoY with the same month last year. Rates are calculated from the counts.</p>
+    <p>January to September 2026 email figures come from the 2026 email send audit. “Broad” means a send to 1,000 or more people on the main AIA Canada list.</p>
   </footer>
 </main>
 <div id="tip" hidden></div>
-
 <script>
 const $=id=>document.getElementById(id);
 const fmt=n=>n==null?"–":Math.round(n).toLocaleString("en-CA");
@@ -312,157 +311,262 @@ function colChart(host,o){
 }
 
 function spark(values,colorVar,kind){
-  const W=160,H=34,max=Math.max(...values),min=kind==="bar"?0:Math.min(...values);
-  if(kind==="bar"){const bw=W/values.length;return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${values.map((v,i)=>{const h=Math.max(1,(H-2)*v/max);return `<rect x="${i*bw+1}" y="${H-h}" width="${bw-2}" height="${h}" rx="1.5" fill="${css(typeof colorVar==="function"?colorVar(i,v):colorVar)}"/>`}).join("")}</svg>`}
+  const W=160,H=34,max=Math.max(...values.filter(v=>v!=null)),min=kind==="bar"?0:Math.min(...values);
+  if(kind==="bar"){const bw=W/values.length;return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${values.map((v,i)=>{if(v==null)return "";const h=Math.max(1,(H-2)*v/max);return `<rect x="${i*bw+1}" y="${H-h}" width="${bw-2}" height="${h}" rx="1.5" fill="${css(typeof colorVar==="function"?colorVar(i,v):colorVar)}"/>`}).join("")}</svg>`}
   const x=i=>2+(W-6)*i/(values.length-1),y=v=>H-3-(H-6)*(v-min)/((max-min)||1);
   const d=values.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)).join("");
   const area=d+`L${x(values.length-1)},${H}L${x(0)},${H}Z`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${area}" fill="${css(colorVar)}" opacity=".12"/><path d="${d}" fill="none" stroke="${css(colorVar)}" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${x(values.length-1)}" cy="${y(values[values.length-1])}" r="3" fill="${css(colorVar)}"/></svg>`;
 }
 
-/* ---------- data ---------- */
-async function getJSON(u){try{const r=await fetch(u+(u.includes("?")?"&":"?")+"t="+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;return await r.json()}catch(e){return null}}
-const D={};
-const TODAY=new Date();
-const daysTo=s=>Math.ceil((new Date(s+"T12:00:00")-TODAY)/864e5);
+/* ---------- config ---------- */
+const SUPABASE_URL="https://cyeirmvdstdhcbuyghvv.supabase.co";
+const SUPABASE_KEY="sb_publishable_PK9ID4XPE7qWUTsqpGtgrw_5-njCD0e";
+const BRANDS=["AIA Canada","CCIF","YPA","I-CAR"];
+const MONTH_CAP=9;
+const BENCH={open:0.335,click:0.027,optout:0.0018}; // association / nonprofit averages from the 2026 audit
 
-function eventStatus(e){
-  const frac=e.lastYearFinal&&e.lastYearSamePoint!=null?e.lastYearSamePoint/e.lastYearFinal:null;
-  if(frac==null||!e.target)return{kind:"none",label:"No prior year",expected:null};
-  const expected=e.target*frac,ratio=e.registrations/expected;
-  if(ratio>=1.05)return{kind:"good",label:"Ahead",expected,ratio};
-  if(ratio>=0.95)return{kind:"good",label:"On pace",expected,ratio};
-  if(ratio>=0.85)return{kind:"serious",label:"Slightly behind",expected,ratio};
-  return{kind:"crit",label:"Behind",expected,ratio};
+/* ---------- data access ---------- */
+async function rest(table,query){
+  const out=[];let from=0;const size=1000;
+  for(;;){
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,Range:`${from}-${from+size-1}`,"Range-Unit":"items"}});
+    if(!r.ok)throw new Error(`${table}: ${r.status}`);
+    const rows=await r.json();out.push(...rows);
+    if(rows.length<size)return out;from+=size;
+  }
+}
+const D={metrics:[],events:[],snaps:[]};
+let IDX={};
+function index(){
+  IDX={};
+  for(const m of D.metrics){const k=`${m.period}|${m.source}|${m.brand}|${m.metric}|${m.dimension}`;IDX[k]=Number(m.value)}
+}
+const periodOf=(y,m)=>`${y}-${String(m).padStart(2,"0")}-01`;
+function shiftMonth(p,n){const d=new Date(p+"T12:00:00");d.setMonth(d.getMonth()+n);return periodOf(d.getFullYear(),d.getMonth()+1)}
+const mLabel=(p,o={month:"short",year:"numeric"})=>new Date(p+"T12:00:00").toLocaleDateString("en-CA",o);
+const mShort=p=>{const d=new Date(p+"T12:00:00");return d.toLocaleDateString("en-CA",{month:"short"})+(d.getMonth()===0?" "+String(d.getFullYear()).slice(2):"")};
+
+// Sum a metric over the selected brands (or a fixed brand). Returns null when nothing was uploaded.
+function val(period,source,metric,dim="",brand){
+  const brands=brand?[brand]:state.brand?[state.brand]:BRANDS;
+  let s=0,found=false;
+  for(const b of brands){const v=IDX[`${period}|${source}|${b}|${metric}|${dim}`];if(v!=null){s+=v;found=true}}
+  return found?s:null;
+}
+const allVal=(period,source,metric,dim="")=>IDX[`${period}|${source}|All|${metric}|${dim}`]??null;
+const ratio=(a,b)=>a==null||!b?null:a/b;
+function series(fn,n=13){const out=[];for(let i=n-1;i>=0;i--){const p=shiftMonth(state.month,-i);out.push({p,v:fn(p)})}return out}
+
+/* ---------- change chips ---------- */
+function change(cur,prev,{rate=false,better="higher"}={}){
+  if(cur==null||prev==null)return null;
+  const d=rate?(cur-prev)*100:(prev?((cur-prev)/Math.abs(prev))*100:null);
+  if(d==null)return null;
+  const good=better==="higher"?d>=0:d<=0;
+  return{d,good,text:(d>=0?"+":"−")+Math.abs(d).toFixed(Math.abs(d)<10?1:0)+(rate?" pts":"%")};
+}
+function chips(fn,opts){
+  const p=state.month,c=fn(p);
+  const mom=change(c,fn(shiftMonth(p,-1)),opts),yoy=change(c,fn(shiftMonth(p,-12)),opts);
+  const one=(lbl,x)=>x?`<span class="chg ${x.good?"up":"down"}">${x.text}</span> ${lbl}`:`<span class="chg none">–</span> ${lbl}`;
+  return `${one("MoM",mom)} · ${one("YoY",yoy)}`;
 }
 
 /* ---------- renderers ---------- */
-function renderSources(){
-  const src=[
-    ["Events","PheedLoop",D.events?.status||"sample"],
-    ["Website","GA4",D.web?.status||"sample"],
-    ["Email","Insightly",D.email?.status||"audit"],
-    ["Send plan","Wrike eBlast calendar",D.eblast?"live":"sample"],
-    ["Social","Scheduling tool",D.social?.status||"sample"],
-  ];
-  $("sources").innerHTML='<span class="lbl">Data sources</span>'+src.map(([a,b,s])=>`<span class="src ${s}"><i></i>${a} <small>${b} · ${s==="live"?"live":s==="audit"?"2026 audit":"sample"}</small></span>`).join("");
+const NODATA=`<span class="nodata">Not uploaded</span>`;
+function renderCoverage(){
+  const p=state.month;
+  const has=src=>D.metrics.some(m=>m.period===p&&m.source===src);
+  const hasEv=D.snaps.some(s=>s.period===p);
+  const items=[["Website","GA4",has("ga4")],["Email","Insightly",has("insightly")],["Social","Scheduling tool",has("social")],["Events","PheedLoop",hasEv],["Send plan","eBlast calendar",!!D.eblast]];
+  $("coverage").innerHTML=`<span class="lbl">${mLabel(p,{month:"long",year:"numeric"})}</span>`+items.map(([a,b,ok])=>`<span class="src ${ok?"live":"sample"}"><i></i>${a} <small>${b} · ${ok?(a==="Send plan"?"live":"uploaded"):"not uploaded"}</small></span>`).join("")+`<a class="src link" href="upload.html">Upload or update this month →</a>`;
 }
 
+function kpiCard(t){
+  return `<div class="card kpi ${t.v==null?"empty":""}"><div class="top"><span class="k">${t.k}</span>${t.tag||""}</div><div class="v">${t.v==null?NODATA:t.v}${t.v!=null&&t.small?`<small>${t.small}</small>`:""}</div><div class="d">${t.v==null?"":t.d||""}</div>${t.v!=null&&t.p?`<div>${t.p}</div>`:""}${t.v!=null&&t.s?t.s:""}</div>`;
+}
+function sparkFrom(sr,color,kind,colorFn){
+  const vals=sr.map(x=>x.v);if(vals.filter(v=>v!=null).length<2)return "";
+  const filled=kind==="bar"?vals:vals.map(v=>v??0);
+  return spark(filled,colorFn||color,kind);
+}
 function renderKPIs(){
-  const k=[];
-  // Events
-  const evs=D.events.events.filter(e=>daysTo(e.date)>=0);
-  const regs=evs.reduce((a,e)=>a+e.registrations,0),tgt=evs.reduce((a,e)=>a+(e.target||0),0);
-  const behind=evs.filter(e=>["crit","serious"].includes(eventStatus(e).kind)).length;
-  k.push({tag:D.events.status,k:"Registrations, upcoming events",v:fmt(regs),small:` / ${fmt(tgt)}`,d:`${evs.length} events · ${pct(regs/tgt,0)} of combined target`,p:behind?pill(behind>1?"crit":"serious",`${behind} behind pace`):pill("good","All on pace")});
-  // Web
-  const w=D.web.totals,wd=(w.sessions30-w.sessionsPrev30)/w.sessionsPrev30;
-  const weekTot=D.web.weeks.map((_,i)=>D.web.brands.reduce((a,b)=>a+b.sessions[i],0));
-  k.push({tag:D.web.status,k:"Website sessions, 30 days",v:fmt(w.sessions30),d:`<span class="${wd>=0?"up":"down"}">${wd>=0?"▲":"▼"} ${pct(Math.abs(wd))}</span> vs previous 30 days`,s:spark(weekTot,"--s1")});
-  // Email engagement
-  const e=D.email.totals,b=D.email.benchmarks;
-  k.push({tag:D.email.status,k:"Email open rate, 2026",v:pct(e.openRate),d:`Associations average ${pct(b.openRate)} · clicks ${pct(e.clickRate)} vs ${pct(b.clickRate)}`,p:pill("serious",`${((b.openRate-e.openRate)*100).toFixed(0)} pts below peers`)});
-  // Main list load
-  const L=D.email.broadSendsMainList,last=L[L.length-1],lm=D.email.months[L.length-1];
-  k.push({tag:D.email.status,k:`Broad emails to a member, ${lm}`,v:fmt(last),small:` / ~${D.email.monthlyCap} cap`,d:`2026 average ${e.emailsPerMemberMonth} a month · peers ${b.emailsPerMonth}`,p:last>D.email.monthlyCap?pill("crit","Over cap"):pill("good","Within cap"),s:spark(L,(i,v)=>v>D.email.monthlyCap?"--crit":"--seq","bar")});
-  // Send plan (live)
-  if(D.eblast){const r=D.eblast.rule;k.push({tag:"live",k:"Send plan, next 8 weeks",v:fmt(r.weeksOver),small:r.weeksOver===1?" week over cap":" weeks over cap",d:`${r.doubles} same-day double${r.doubles===1?"":"s"} · ${r.broad} broad sends booked`,p:r.weeksOver||r.doubles?pill("crit","Fix before sending"):pill("good","Within the rules")})}
-  // Social
-  const sp=D.social.platforms,imp=sp.reduce((a,p)=>a+p.impressions30,0),fol=sp.reduce((a,p)=>a+p.change30,0);
-  k.push({tag:D.social.status,k:"Social impressions, 30 days",v:fmt(imp),d:`${fol>=0?"+":""}${fmt(fol)} followers across ${sp.length} platforms`,s:spark(D.social.engagementWeekly,"--s1")});
-  $("kpis").innerHTML=k.map(t=>`<div class="card kpi ${t.tag==="sample"?"sample":""}"><div class="top"><span class="k">${t.k}</span>${TAG[t.tag]}</div><div class="v">${t.v}${t.small?`<small>${t.small}</small>`:""}</div><div class="d">${t.d}</div>${t.p?`<div>${t.p}</div>`:""}${t.s||""}</div>`).join("");
+  const p=state.month,k=[];
+  const sess=x=>val(x,"ga4","sessions");
+  k.push({k:"Website sessions",v:sess(p)!=null?fmt(sess(p)):null,d:chips(sess),s:sparkFrom(series(sess),"--s1")});
+  const ke=x=>val(x,"ga4","key_events");
+  k.push({k:"Website key events",v:ke(p)!=null?fmt(ke(p)):null,d:chips(ke),s:sparkFrom(series(ke),"--s1")});
+  const open=x=>ratio(val(x,"insightly","unique_opens"),val(x,"insightly","delivered"))??(state.brand?null:allVal(x,"insightly","unique_open_rate_main_list"));
+  const o=open(p);
+  k.push({k:"Email open rate",v:o!=null?pct(o):null,d:chips(open,{rate:true}),p:o!=null?(o>=BENCH.open?pill("good","At or above peers"):pill("serious",`${((BENCH.open-o)*100).toFixed(0)} pts below peers`)):null});
+  const bs=x=>allVal(x,"insightly","broad_sends_main_list"),b=bs(p);
+  k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${MONTH_CAP}`,d:chips(bs,{better:"lower"}),p:b!=null?(b>MONTH_CAP?pill("crit","Over cap"):pill("good","Within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")});
+  const eng=x=>{let s=null;for(const pl of PLATFORMS){const v=val(x,"social","engagements",pl);if(v!=null)s=(s||0)+v}return s};
+  k.push({k:"Social engagements",v:eng(p)!=null?fmt(eng(p)):null,d:chips(eng),s:sparkFrom(series(eng),"--s1")});
+  const ev=eventsFor(p).filter(e=>e.status!=="past");
+  const regs=ev.reduce((a,e)=>a+(e.regs||0),0),tgt=ev.reduce((a,e)=>a+(e.target_registrations||0),0);
+  const behind=ev.filter(e=>["crit","serious"].includes(e.st.kind)).length;
+  k.push({k:"Registrations, upcoming events",v:ev.length?fmt(regs):null,small:tgt?` / ${fmt(tgt)}`:"",d:`${ev.length} event${ev.length===1?"":"s"}${tgt?` · ${pct(regs/tgt,0)} of target`:""}`,p:ev.length?(behind?pill(behind>1?"crit":"serious",`${behind} behind`):pill("good","None behind")):null});
+  if(D.eblast){const r=D.eblast;k.push({k:"Send plan, next 8 weeks",tag:'<span class="tag live">Live</span>',v:fmt(r.weeksOver),small:r.weeksOver===1?" week over cap":" weeks over cap",d:`${r.doubles} same-day double${r.doubles===1?"":"s"} · ${r.broad} broad sends booked`,p:r.weeksOver||r.doubles?pill("crit","Fix before sending"):pill("good","Within the rules")})}
+  $("kpis").innerHTML=k.map(kpiCard).join("");
 }
 
+const CHANNELS=["Organic Search","Direct","Email","Organic Social","Referral","Paid Search","Paid Social","Other"];
+const PLATFORMS=["LinkedIn","Facebook","Instagram","X","YouTube"];
+function emptyNote(host,text){$(host).innerHTML=`<p class="empty-note">${text}</p>`}
+
+function renderMarketing(){
+  const p=state.month,sr=(b)=>series(x=>val(x,"ga4","sessions","",b));
+  const brands=state.brand?[state.brand]:BRANDS;
+  const ser=brands.map(b=>({name:b,color:BRAND_VAR[b],values:sr(b).map(x=>x.v)})).filter(s=>s.values.some(v=>v!=null));
+  const labels=series(()=>0).map(x=>mShort(x.p));
+  if(ser.length){lineChart($("webChart"),{labels,endLabels:true,height:230,tipLabel:i=>mLabel(series(()=>0)[i].p,{month:"long",year:"numeric"}),series:ser});$("webLegend").innerHTML=ser.map(s=>`<span><i style="--c:var(${s.color})"></i>${esc(s.name)}</span>`).join("")}
+  else{emptyNote("webChart","No GA4 numbers uploaded for the last 13 months.");$("webLegend").innerHTML=""}
+  $("chanSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
+  const ch=CHANNELS.map(c=>({c,v:val(p,"ga4","sessions",c),prev:val(shiftMonth(p,-1),"ga4","sessions",c)})).filter(x=>x.v!=null);
+  const tot=ch.reduce((a,x)=>a+x.v,0);
+  if(ch.length){const mx=Math.max(...ch.map(x=>x.v));$("channels").innerHTML=ch.sort((a,b)=>b.v-a.v).map(x=>{const c=change(x.v,x.prev);return `<div class="hb"><span class="t">${esc(x.c)}</span><span class="track"><span class="fill" style="width:${x.v/mx*100}%"></span></span><span class="val">${pct(x.v/tot,0)}</span></div>`}).join("")+`<p class="note">${fmt(tot)} sessions with a channel. Share of the month's total.</p>`}
+  else emptyNote("channels","No channel breakdown uploaded for this month.");
+  $("webTblSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
+  const rows=brands.map(b=>{
+    const g=(m,x=p)=>val(x,"ga4",m,"",b);
+    const er=x=>ratio(g("engaged_sessions",x),g("sessions",x));
+    return{b,sess:g("sessions"),users:g("users"),ke:g("key_events"),er:er(p),time:g("avg_engagement_sec"),
+      sessC:chips(x=>g("sessions",x)),keC:chips(x=>g("key_events",x)),erC:chips(er,{rate:true})};
+  }).filter(r=>r.sess!=null||r.ke!=null);
+  $("webTable").innerHTML=rows.length?`<thead><tr><th>Brand</th><th class="num">Sessions</th><th class="num">Users</th><th class="num">Key events</th><th class="num">Engagement rate</th><th class="num">Avg time</th></tr></thead><tbody>`+rows.map(r=>`<tr><td><i class="dot" style="--c:var(${BRAND_VAR[r.b]})"></i>${esc(r.b)}</td><td class="num">${fmt(r.sess)}<div class="cc">${r.sessC}</div></td><td class="num">${fmt(r.users)}</td><td class="num">${fmt(r.ke)}<div class="cc">${r.keC}</div></td><td class="num">${pct(r.er)}<div class="cc">${r.erC}</div></td><td class="num">${r.time==null?"–":Math.floor(r.time/60)+"m "+String(Math.round(r.time%60)).padStart(2,"0")+"s"}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No GA4 numbers uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.</td></tr></tbody>`;
+}
+
+function renderComms(){
+  const p=state.month,months=series(()=>0).map(x=>x.p);
+  const bs=months.map(x=>allVal(x,"insightly","broad_sends_main_list"));
+  if(bs.some(v=>v!=null)){
+    colChart($("loadChart"),{labels:months.map(mShort),values:bs.map(v=>v??0),cap:MONTH_CAP,height:190,colorFor:(i,v)=>v>MONTH_CAP?"--crit":"--seq",labelIf:(i,v)=>bs[i]!=null&&(v>MONTH_CAP||months[i]===p),
+      tip:i=>`<b>${mLabel(months[i],{month:"long",year:"numeric"})}</b><div>${bs[i]==null?"Not uploaded":bs[i]+" broad sends"}</div>${allVal(months[i],"insightly","opt_outs_main_list")!=null?`<div>${fmt(allVal(months[i],"insightly","opt_outs_main_list"))} opt-outs from those sends</div>`:""}`});
+  } else emptyNote("loadChart","No main-list send counts uploaded for the last 13 months.");
+  const open=x=>ratio(val(x,"insightly","unique_opens"),val(x,"insightly","delivered"));
+  const click=x=>ratio(val(x,"insightly","unique_clicks"),val(x,"insightly","delivered"));
+  const so=months.map(open),sc=months.map(click);
+  if(so.some(v=>v!=null)){
+    lineChart($("rateChart"),{labels:months.map(mShort),height:190,yFmt:v=>pct(v,0),tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),endLabels:true,series:[{name:"Open rate",color:"--s1",values:so},{name:"Click rate",color:"--s2",values:sc}]});
+    $("rateLegend").innerHTML=`<span><i style="--c:var(--s1)"></i>Unique open rate</span><span><i style="--c:var(--s2)"></i>Unique click rate</span><span class="muted">Peers: opens ${pct(BENCH.open)}, clicks ${pct(BENCH.click)}</span>`;
+  } else {emptyNote("rateChart","Open and click rates appear once monthly Insightly numbers (delivered, unique opens, unique clicks) are uploaded. The 2026 audit only has year-to-date rates: 23.3% opens and 4.4% clicks.");$("rateLegend").innerHTML=""}
+  $("emailSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
+  const brands=state.brand?[state.brand]:BRANDS;
+  const rows=brands.map(b=>{const g=(m,x=p)=>val(x,"insightly",m,"",b);const o=x=>ratio(g("unique_opens",x),g("delivered",x)),c=x=>ratio(g("unique_clicks",x),g("delivered",x)),u=x=>ratio(g("opt_outs",x),g("delivered",x));
+    return{b,sends:g("campaign_sends"),del:g("delivered"),o:o(p),c:c(p),u:u(p),bo:ratio(g("hard_bounces"),g("delivered")),oC:chips(o,{rate:true}),cC:chips(c,{rate:true}),delC:chips(x=>g("delivered",x))}}).filter(r=>r.del!=null||r.sends!=null);
+  $("emailTable").innerHTML=rows.length?`<thead><tr><th>Brand</th><th class="num">Campaigns</th><th class="num">Delivered</th><th class="num">Open rate</th><th class="num">Click rate</th><th class="num">Opt-out rate</th><th class="num">Hard bounce rate</th></tr></thead><tbody>`+rows.map(r=>`<tr><td><i class="dot" style="--c:var(${BRAND_VAR[r.b]})"></i>${esc(r.b)}</td><td class="num">${fmt(r.sends)}</td><td class="num">${fmt(r.del)}<div class="cc">${r.delC}</div></td><td class="num">${pct(r.o)}<div class="cc">${r.oC}</div></td><td class="num">${pct(r.c)}<div class="cc">${r.cC}</div></td><td class="num ${r.u!=null&&r.u>BENCH.optout?"down":""}">${pct(r.u,2)}</td><td class="num ${r.bo!=null&&r.bo>0.02?"down":""}">${pct(r.bo,1)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No email numbers by brand uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.${allVal(p,"insightly","broad_sends_main_list")!=null?" The main-list send count above comes from the 2026 audit.":""}</td></tr></tbody>`;
+  $("socialSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
+  const prev=shiftMonth(p,-1);
+  const srows=PLATFORMS.map(pl=>{const g=(m,x=p)=>val(x,"social",m,pl);return{pl,f:g("followers"),fd:g("followers")!=null&&g("followers",prev)!=null?g("followers")-g("followers",prev):null,i:g("impressions"),e:g("engagements"),er:ratio(g("engagements"),g("impressions")),posts:g("posts"),lc:g("link_clicks"),eC:chips(x=>g("engagements",x))}}).filter(r=>r.f!=null||r.e!=null||r.i!=null);
+  $("socialTable").innerHTML=srows.length?`<thead><tr><th>Platform</th><th class="num">Followers</th><th class="num">Impressions</th><th class="num">Engagements</th><th class="num">Eng. rate</th><th class="num">Posts</th></tr></thead><tbody>`+srows.map(r=>`<tr><td>${esc(r.pl)}</td><td class="num">${fmt(r.f)}${r.fd!=null?`<div class="cc"><span class="chg ${r.fd>=0?"up":"down"}">${r.fd>=0?"+":"−"}${fmt(Math.abs(r.fd))}</span> MoM</div>`:""}</td><td class="num">${fmt(r.i)}</td><td class="num">${fmt(r.e)}<div class="cc">${r.eC}</div></td><td class="num">${pct(r.er,1)}</td><td class="num">${fmt(r.posts)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No social numbers uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.</td></tr></tbody>`;
+}
+
+/* ---------- events ---------- */
+function monthsBefore(eventDate,period){const e=new Date(eventDate+"T12:00:00"),q=new Date(period+"T12:00:00");return (e.getFullYear()-q.getFullYear())*12+(e.getMonth()-q.getMonth())}
+function snap(code,period){return D.snaps.find(s=>s.event_code===code&&s.period===period)||null}
+function finalSnap(code){return D.snaps.filter(s=>s.event_code===code).sort((a,b)=>b.period.localeCompare(a.period))[0]||null}
+function eventsFor(p){
+  const monthEnd=shiftMonth(p,1);
+  return D.events.filter(e=>{
+    if(state.brand&&e.brand!==state.brand)return false;
+    const s=snap(e.code,p);const endOrStart=e.end_date||e.start_date;
+    return s||(e.start_date>=p&&D.snaps.some(x=>x.event_code===e.code&&x.period<=p));
+  }).map(e=>{
+    let s=snap(e.code,p);
+    if(!s)s=D.snaps.filter(x=>x.event_code===e.code&&x.period<=p).sort((a,b)=>b.period.localeCompare(a.period))[0];
+    const prevS=snap(e.code,shiftMonth(p,-1));
+    const past=(e.end_date||e.start_date)<p;
+    const mb=monthsBefore(e.start_date,p);
+    let ly=null,lyFinal=null;
+    if(e.prior_code){const pe=D.events.find(x=>x.code===e.prior_code);if(pe){const pp=shiftMonth(periodOf(+pe.start_date.slice(0,4),+pe.start_date.slice(5,7)),-mb);const ps=snap(pe.code,pp);ly=ps?ps.registrations:null;lyFinal=finalSnap(pe.code)?.registrations??null}}
+    const regs=s?.registrations??null,tgt=e.target_registrations;
+    let st={kind:"none",label:"No benchmark"},expected=null;
+    if(past){st=tgt?(regs>=tgt?{kind:"good",label:"Hit target"}:{kind:"serious",label:`${pct(regs/tgt,0)} of target`}):{kind:"none",label:"Finished"}}
+    else if(tgt&&ly!=null&&lyFinal){expected=tgt*ly/lyFinal;const r=regs/expected;st=r>=1.05?{kind:"good",label:"Ahead"}:r>=0.95?{kind:"good",label:"On pace"}:r>=0.85?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
+    else if(tgt){st={kind:"none",label:`${pct(regs/tgt,0)} of target`}}
+    return{...e,regs,gain:regs!=null&&prevS?regs-prevS.registrations:null,revenue:s?.revenue??null,attendance:s?.attendance??null,ly,lyFinal,expected,st,status:past?"past":"upcoming",mb};
+  }).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+}
 function renderEvents(){
-  const E=D.events;
-  $("eventsCard").classList.toggle("sample",E.status==="sample");
-  $("evTag").innerHTML=TAG[E.status]+(E.status==="sample"?' <span class="note" style="margin:0 0 0 6px">Connect PheedLoop to see real registrations</span>':"");
-  const evs=E.events.filter(e=>daysTo(e.date)>=-7).sort((a,b)=>a.date.localeCompare(b.date));
-  let h=`<thead><tr><th>Event</th><th class="num">Days out</th><th>Registrations vs target</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`;
+  const p=state.month,evs=eventsFor(p);
+  if(!evs.length){$("evTable").innerHTML=`<tbody><tr><td class="empty-note">No event registrations uploaded for ${mLabel(p,{month:"long",year:"numeric"})}. Add them on the Events tab of the monthly template.</td></tr></tbody>`;$("evNote").textContent="";return}
+  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`;
   evs.forEach((e,i)=>{
-    const st=eventStatus(e),dd=daysTo(e.date);
-    const share=e.target?Math.min(1,e.registrations/e.target):0,exp=st.expected?Math.min(1,st.expected/e.target):null;
-    const ly=e.lastYearSamePoint?(e.registrations-e.lastYearSamePoint)/e.lastYearSamePoint:null;
-    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${esc(e.brand)} · ${new Date(e.date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div></td>
-      <td class="num">${dd>=0?dd:"Past"}</td>
-      <td><div class="prog"><div class="row"><b>${fmt(e.registrations)}</b><span style="color:var(--muted)">of ${fmt(e.target)} · ${pct(share,0)}</span></div><div class="bar" title="Marker: where you'd expect to be today at last year's pace"><b style="width:${share*100}%"></b>${exp!=null?`<i style="left:calc(${exp*100}% - 1px)"></i>`:""}</div></div></td>
-      <td class="num">${ly==null?'<span style="color:var(--muted)">–</span>':`<span class="${ly>=0?"up":"down"}">${ly>=0?"+":""}${pct(ly,0)}</span>`}</td>
-      <td class="num">${money(e.revenue)}<div class="evmeta">of ${money(e.revenueTarget)}</div></td>
-      <td>${pill(st.kind,st.label)}</td></tr>
-      <tr class="detail" hidden data-d="${i}"><td colspan="6"><div class="detail-grid"><div><h3>Registration pace <span class="sub">· cumulative, by weeks before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.pace.lastYear?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span></div></div>
-      <div class="facts"><div><span>Registrations</span><b>${fmt(e.registrations)}</b></div><div><span>Target</span><b>${fmt(e.target)}</b></div><div><span>Expected today at last year's pace</span><b>${st.expected?fmt(st.expected):"–"}</b></div><div><span>Last year at this point</span><b>${fmt(e.lastYearSamePoint)}</b></div><div><span>Last year final</span><b>${fmt(e.lastYearFinal)}</b></div><div><span>Revenue</span><b>${money(e.revenue)} of ${money(e.revenueTarget)}</b></div></div></div></td></tr>`;
+    const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
+    const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
+    const lyd=e.ly?(e.regs-e.ly)/e.ly:null;
+    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${esc(e.brand)} · ${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div></td>
+      <td class="num">${e.status==="past"?"Done":e.mb<=0?"This month":e.mb}</td>
+      <td><div class="prog"><div class="row"><b>${fmt(e.regs)}</b><span style="color:var(--muted)">${e.target_registrations?`of ${fmt(e.target_registrations)} target`:e.capacity?`of ${fmt(e.capacity)} capacity`:""}</span></div>${share?`<div class="bar"><b style="width:${share*100}%"></b>${exp!=null?`<i style="left:calc(${exp*100}% - 1px)"></i>`:""}</div>`:""}</div></td>
+      <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
+      <td class="num">${lyd==null?'<span style="color:var(--muted)">–</span>':`<span class="${lyd>=0?"up":"down"}">${lyd>=0?"+":""}${pct(lyd,0)}</span>`}</td>
+      <td class="num">${e.revenue==null?"–":money(e.revenue)}${e.target_revenue?`<div class="evmeta">of ${money(e.target_revenue)}</div>`:""}</td>
+      <td>${pill(e.st.kind,e.st.label)}</td></tr>
+      <tr class="detail" hidden data-d="${i}"><td colspan="7"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
   });
   $("evTable").innerHTML=h+"</tbody>";
-  $("evNote").textContent="Click an event for its registration curve. The marker on each bar shows where registrations would be today if the event tracked last year's pace toward this year's target.";
+  $("evNote").textContent="Click an event for its month-by-month registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target.";
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
-    const toggle=()=>{const i=tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
-      if(!open){const e=evs[i],W=e.weeksToEvent,labels=Array.from({length:W+1},(_,k)=>k===W?"Event":`${W-k} wk`);
-        lineChart(d.querySelector(".pace"),{labels,height:200,target:e.target,tipLabel:k=>k===W?"Event week":`${W-k} weeks out`,series:[...(e.pace.lastYear?[{name:"Last year",color:"--muted",values:e.pace.lastYear,dash:true}]:[]),{name:"This year",color:"--s1",values:e.pace.thisYear.concat(Array(W+1-e.pace.thisYear.length).fill(null))}]})}};
+    const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
+      if(!open){const e=evs[i];const own=D.snaps.filter(s=>s.event_code===e.code).map(s=>({mb:monthsBefore(e.start_date,s.period),v:s.registrations}));
+        let prior=[];if(e.prior_code){const pe=D.events.find(x=>x.code===e.prior_code);if(pe)prior=D.snaps.filter(s=>s.event_code===pe.code).map(s=>({mb:monthsBefore(pe.start_date,s.period),v:s.registrations}))}
+        const all=[...own,...prior].map(x=>x.mb);const max=Math.max(...all,1),min=Math.min(...all,0);
+        const xs=[];for(let m=max;m>=min;m--)xs.push(m);
+        const pick=(arr,m)=>{const f=arr.find(x=>x.mb===m);return f?f.v:null};
+        lineChart(d.querySelector(".pace"),{labels:xs.map(m=>m>0?`${m} mo`:m===0?"Event month":`+${-m} mo`),height:200,target:e.target_registrations||null,tipLabel:k=>xs[k]>0?`${xs[k]} months before`:xs[k]===0?"Event month":"After the event",
+          series:[...(prior.length?[{name:"Last year",color:"--muted",values:xs.map(m=>pick(prior,m)),dash:true}]:[]),{name:"This year",color:"--s1",values:xs.map(m=>pick(own,m))}]})}};
     tr.addEventListener("click",toggle);tr.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();toggle()}});
   });
 }
 
-function renderWeb(){
-  const w=D.web;["webCard","chanCard","pagesCard"].forEach(id=>$(id).classList.toggle("sample",w.status==="sample"));
-  $("webTag").innerHTML=TAG[w.status];
-  const labels=w.weeks.map(d=>new Date(d+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"}));
-  lineChart($("webChart"),{labels,endLabels:true,height:230,tipLabel:i=>"Week of "+labels[i],series:w.brands.map(b=>({name:b.brand,color:BRAND_VAR[b.brand]||"--s1",values:b.sessions}))});
-  $("webLegend").innerHTML=w.brands.map(b=>`<span><i style="--c:var(${BRAND_VAR[b.brand]})"></i>${esc(b.brand)}</span>`).join("");
-  const mx=Math.max(...w.channels.map(c=>c.share));
-  $("channels").innerHTML=w.channels.map(c=>`<div class="hb"><span class="t">${esc(c.channel)}</span><span class="track"><span class="fill" style="width:${c.share/mx*100}%"></span></span><span class="val">${pct(c.share,0)}</span></div>`).join("");
-  $("pages").innerHTML=`<thead><tr><th>Page</th><th class="num">Sessions</th><th class="num">Clicks to register</th><th class="num">Rate</th></tr></thead><tbody>`+w.topEventPages.map(p=>`<tr><td>${esc(p.page)}</td><td class="num">${fmt(p.sessions)}</td><td class="num">${fmt(p.regClicks)}</td><td class="num">${pct(p.regClicks/p.sessions)}</td></tr>`).join("")+"</tbody>";
-}
-
-function renderEmail(){
-  const e=D.email;["loadCard","benchCard","catCard"].forEach(id=>$(id).classList.toggle("sample",e.status==="sample"));
-  $("emailTag").innerHTML=TAG[e.status];
-  colChart($("loadChart"),{labels:e.months,values:e.broadSendsMainList,cap:e.monthlyCap,height:190,
-    colorFor:(i,v)=>v>e.monthlyCap?"--crit":"--seq",labelIf:(i,v)=>v>e.monthlyCap||i===e.months.length-1,
-    tip:i=>`<b>${e.months[i]} 2026</b><div>${e.broadSendsMainList[i]} broad sends to the main list</div><div>${fmt(e.optOuts[i])} opt-outs · ${e.deliveredK[i]}k emails delivered</div>${e.broadSendsMainList[i]>e.monthlyCap?"<div><b>Over the ~9 a month cap</b></div>":""}`});
-  const t=e.totals,b=e.benchmarks;
-  const row=(name,val,bm,good,lbl)=>{const mx=Math.max(val,bm)*1.15;return `<div class="r"><span>${name}</span><div class="bar" style="height:10px"><b style="width:${val/mx*100}%"></b><i style="left:calc(${bm/mx*100}% - 1px)" title="Peer benchmark"></i></div><span>${lbl(val)} ${good?pill("good","vs "+lbl(bm)):pill("serious","vs "+lbl(bm))}</span></div>`};
-  $("bench").innerHTML=row("Open rate",t.openRate,b.openRate,t.openRate>=b.openRate,v=>pct(v))+row("Click rate",t.clickRate,b.clickRate,t.clickRate>=b.clickRate,v=>pct(v))+row("Opt-out rate",t.optOutRate,b.optOutRate,t.optOutRate<=b.optOutRate,v=>pct(v,2))+row("Emails a month",t.emailsPerMemberMonth,b.emailsPerMonth,t.emailsPerMemberMonth<=b.emailsPerMonth,v=>v.toFixed(1))+
-    `<p class="note">Bar is AIA Canada; the marker is the peer average (associations for opens and clicks, nonprofits for opt-outs and frequency).</p>`;
-  const mx=Math.max(...e.openRateByCategory.map(c=>c.openRate));
-  $("cats").innerHTML=e.openRateByCategory.map(c=>`<div class="hb"><span class="t">${esc(c.category)}</span><span class="track"><span class="fill ${c.ask?"ask":""}" style="width:${c.openRate/mx*100}%"></span></span><span class="val">${pct(c.openRate)}</span></div>`).join("");
-}
-
-function renderDiscipline(){
-  const host=$("discChart");
-  if(!D.eblast){host.innerHTML='<p class="err">The eBlast calendar data isn\'t reachable from here. It appears once this page is published alongside the eBlast calendar.</p>';$("discCard").classList.add("sample");return}
-  const r=D.eblast.rule;
-  colChart(host,{labels:r.weeks.map(w=>new Date(w+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})),values:r.counts,cap:2,height:170,
-    colorFor:(i,v)=>v>2?"--crit":"--seq",labelIf:(i,v)=>v>0,tip:i=>`<b>Week of ${new Date(r.weeks[i]+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</b>`+(r.lists[i].length?r.lists[i].map(t=>`<div>${esc(t)}</div>`).join(""):"<div>No broad sends booked</div>")});
-  $("discNote").innerHTML=`Cap is two broad sends a week (dashed line). <a href="../eblast-calendar/">Open the eBlast calendar</a> for the details.`;
-}
-
-function renderSocial(){
-  const s=D.social;$("socialCard").classList.toggle("sample",s.status==="sample");
-  $("social").innerHTML=`<thead><tr><th>Platform</th><th class="num">Followers</th><th class="num">30 days</th><th class="num">Engagement</th><th class="num">Impressions</th></tr></thead><tbody>`+
-    s.platforms.map(p=>`<tr><td>${esc(p.platform)}</td><td class="num">${fmt(p.followers)}</td><td class="num"><span class="${p.change30>=0?"up":"down"}">${p.change30>=0?"+":""}${fmt(p.change30)}</span></td><td class="num">${pct(p.engagementRate)}</td><td class="num">${fmt(p.impressions30)}</td></tr>`).join("")+"</tbody>";
-}
-
+/* ---------- eBlast send plan (live) ---------- */
 function summarizeEblast(data){
   if(!data||!data.sends)return null;
-  const wk=s=>{const d=new Date(s+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10)};
-  const start=wk(new Date().toISOString().slice(0,10));
-  const weeks=Array.from({length:8},(_,i)=>{const d=new Date(start+"T12:00:00");d.setDate(d.getDate()+7*i);return d.toISOString().slice(0,10)});
+  const wk=s=>{const d=new Date(s+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+  const t=new Date(),start=wk(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`);
+  const weeks=Array.from({length:8},(_,i)=>{const d=new Date(start+"T12:00:00");d.setDate(d.getDate()+7*i);return wk(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`)});
   const broad=data.sends.filter(s=>s.b&&s.s!=="X");
   const lists=weeks.map(w=>broad.filter(s=>wk(s.d)===w).map(s=>s.t));
   const counts=lists.map(l=>l.length);
-  const byDay={};broad.filter(s=>s.d>=start&&s.d<weeks[7]).forEach(s=>byDay[s.d]=(byDay[s.d]||0)+1);
+  const byDay={};broad.filter(s=>wk(s.d)>=start&&wk(s.d)<=weeks[7]).forEach(s=>byDay[s.d]=(byDay[s.d]||0)+1);
   return{weeks,counts,lists,weeksOver:counts.filter(c=>c>2).length,doubles:Object.values(byDay).filter(c=>c>1).length,broad:counts.reduce((a,b)=>a+b,0)};
 }
+function renderDiscipline(){
+  const host=$("discChart");
+  if(!D.eblast){host.innerHTML='<p class="empty-note">The eBlast calendar isn\'t reachable from here.</p>';return}
+  const r=D.eblast,lab=w=>new Date(w+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"});
+  colChart(host,{labels:r.weeks.map(lab),values:r.counts,cap:2,height:170,colorFor:(i,v)=>v>2?"--crit":"--seq",labelIf:(i,v)=>v>0,tip:i=>`<b>Week of ${lab(r.weeks[i])}</b>`+(r.lists[i].length?r.lists[i].map(t=>`<div>${esc(t)}</div>`).join(""):"<div>No broad sends booked</div>")});
+  $("discNote").innerHTML=`Cap is two broad sends a week (dashed line). <a href="../eblast-calendar/">Open the eBlast calendar</a>.`;
+}
 
+/* ---------- state & boot ---------- */
+const state={month:null,brand:""};
+function render(){renderCoverage();renderKPIs();renderMarketing();renderComms();renderEvents();renderDiscipline()}
+function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));if(state.brand)u.searchParams.set("brand",state.brand);else u.searchParams.delete("brand");history.replaceState(null,"",u)}
 async function boot(){
-  const [events,web,email,social,eb]=await Promise.all(["data/events.json","data/web.json","data/email.json","data/social.json","../eblast-calendar/data.json"].map(getJSON));
-  Object.assign(D,{events,web,email,social});
-  const r=summarizeEblast(eb);if(r)D.eblast={rule:r};
-  if(!events||!web||!email||!social){document.querySelector("main").insertAdjacentHTML("afterbegin",'<p class="card err">Some dashboard data didn\'t load. Refresh the page in a minute.</p>');return}
-  $("asof").innerHTML=`As of <b>${new Date().toLocaleDateString("en-CA",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}</b>`;
-  renderSources();renderKPIs();renderEvents();renderWeb();renderEmail();renderDiscipline();renderSocial();
-  let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{renderWeb();renderEmail();renderDiscipline();document.querySelectorAll('tr.ev[aria-expanded="true"]').forEach(tr=>{tr.click();tr.click()})},150)});
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{renderKPIs();renderWeb();renderEmail();renderDiscipline()});
+  try{
+    const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
+    Object.assign(D,{metrics,events,snaps});index();
+  }catch(e){$("main").insertAdjacentHTML("afterbegin",'<p class="card empty-note">The dashboard data didn\'t load. Refresh the page in a minute.</p>');return}
+  try{const r=await fetch("../eblast-calendar/data.json?t="+Date.now(),{cache:"no-store"});if(r.ok)D.eblast=summarizeEblast(await r.json())}catch(e){}
+  const periods=[...new Set([...D.metrics.map(m=>m.period),...D.snaps.map(s=>s.period)])].sort();
+  const q=new URL(location.href).searchParams;
+  const now=new Date(),lastFull=shiftMonth(periodOf(now.getFullYear(),now.getMonth()+1),-1);
+  if(!periods.includes(lastFull))periods.push(lastFull);periods.sort();
+  const wanted=q.get("month")?q.get("month")+"-01":null;
+  state.month=wanted&&periods.includes(wanted)?wanted:periods[periods.length-1];
+  state.brand=BRANDS.includes(q.get("brand"))?q.get("brand"):"";
+  const latestWithData=[...new Set(D.metrics.map(m=>m.period))].sort().pop();
+  if(!wanted&&latestWithData&&!D.metrics.some(m=>m.period===state.month)&&!D.snaps.some(s=>s.period===state.month))state.month=latestWithData;
+  $("monthSel").innerHTML=periods.slice().reverse().map(p=>`<option value="${p}">${mLabel(p,{month:"long",year:"numeric"})}</option>`).join("");
+  $("monthSel").value=state.month;$("brandSel").value=state.brand;
+  $("monthSel").onchange=e=>{state.month=e.target.value;setURL();render()};
+  $("brandSel").onchange=e=>{state.brand=e.target.value;setURL();render()};
+  render();
+  let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150)});
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);
 }
 boot();
 </script>
