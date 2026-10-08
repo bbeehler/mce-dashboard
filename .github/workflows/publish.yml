@@ -1,0 +1,41 @@
+name: Refresh and publish
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (GitHub may run it a few minutes late)
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Data pulls for PheedLoop, GA4 and social are added here as each source is connected.
+
+      - name: Build the site
+        run: |
+          mkdir -p _site
+          cp -r index.html data robots.txt .nojekyll _site/
+          echo "{\"checked\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > _site/checked.json
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
