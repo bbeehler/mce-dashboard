@@ -187,6 +187,7 @@ footer p{margin:0}
     </div>
     <div class="controls">
       <label>Month <select id="monthSel"></select></label>
+            <a class="upl" href="https://bbeehler.github.io/eblast-calendar/">eBlast calendar</a>
             <a class="upl" href="upload.html">Upload month</a>
     </div>
   </div>
@@ -541,7 +542,7 @@ function renderDiscipline(){
   if(!D.eblast){host.innerHTML='<p class="empty-note">The eBlast calendar isn\'t reachable from here.</p>';return}
   const r=D.eblast,lab=w=>new Date(w+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"});
   colChart(host,{labels:r.weeks.map(lab),values:r.counts,cap:2,height:170,colorFor:(i,v)=>v>2?"--crit":"--seq",labelIf:(i,v)=>v>0,tip:i=>`<b>Week of ${lab(r.weeks[i])}</b>`+(r.lists[i].length?r.lists[i].map(t=>`<div>${esc(t)}</div>`).join(""):"<div>No broad sends booked</div>")});
-  $("discNote").innerHTML=`Cap is two broad sends a week (dashed line). <a href="../eblast-calendar/">Open the eBlast calendar</a>.`;
+  $("discNote").innerHTML=`Cap is two broad sends a week (dashed line). <a href="https://bbeehler.github.io/eblast-calendar/">Open the eBlast calendar</a>.`;
 }
 
 /* ---------- state & boot ---------- */
