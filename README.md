@@ -8,7 +8,7 @@ Monthly Marketing, Communications and Engagement (Events) results for AIA Canada
 ## How it works
 
 1. Each month, fill in `template/MCE-monthly-data-template.xlsx` (also downloadable from the upload page). Totals only: no personal information.
-2. Sign in on the upload page with an approved email (a one-time link is emailed to you), choose the file, check the preview and save.
+2. On the upload page, enter the upload passcode (the browser remembers it), choose the file, check the preview and save. The passcode is checked by the `mce-upload` Supabase Edge Function, which does the writing; change it under Supabase → Edge Functions → Secrets → `MCE_UPLOAD_PASSCODE`.
 3. The numbers are stored in the **MCE Dashboard** Supabase project and the dashboard shows them immediately. Uploading a month again replaces the numbers it contains; blank cells never overwrite saved numbers.
 
 The send plan card reads the live eBlast calendar (`../eblast-calendar/data.json`).

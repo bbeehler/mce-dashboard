@@ -66,16 +66,16 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
   </section>
 
   <section class="card" id="signin">
-    <h2>2. Sign in</h2>
-    <div id="signedOut">
-      <p>Enter your email and we'll send you a sign-in link. Only approved emails can save data.</p>
-      <form id="loginForm" class="row" style="margin-top:10px">
-        <label for="email" hidden>Email</label>
-        <input id="email" type="email" required placeholder="you@aiacanada.com" autocomplete="email">
-        <button type="submit" id="sendLink">Email me a sign-in link</button>
+    <h2>2. Enter the upload passcode</h2>
+    <div id="lockedBox">
+      <p>Ask Brian for the passcode. This browser remembers it after the first time.</p>
+      <form id="codeForm" class="row" style="margin-top:10px">
+        <label for="passcode" hidden>Passcode</label>
+        <input id="passcode" type="password" required autocomplete="current-password" placeholder="Upload passcode">
+        <button type="submit" id="unlock">Unlock uploads</button>
       </form>
     </div>
-    <div id="signedIn" hidden class="row"><span id="who"></span><button class="ghost" id="signOut" type="button">Sign out</button></div>
+    <div id="unlockedBox" hidden class="row"><span>Uploads unlocked on this browser.</span><button class="ghost" id="lock" type="button">Forget passcode</button></div>
     <div id="authMsg"></div>
   </section>
 
@@ -101,43 +101,36 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
 
   <section class="card">
     <h2>Recent uploads</h2>
-    <div id="history" class="muted">Sign in to see upload history.</div>
+    <div id="history" class="muted">Enter the passcode to see upload history.</div>
   </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-const SUPABASE_URL="https://cyeirmvdstdhcbuyghvv.supabase.co";
-const SUPABASE_KEY="sb_publishable_PK9ID4XPE7qWUTsqpGtgrw_5-njCD0e";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const UPLOAD_FN="https://cyeirmvdstdhcbuyghvv.supabase.co/functions/v1/mce-upload";
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=n=>n==null||n===""?"–":Number(n).toLocaleString("en-CA");
 const msg=(id,kind,text)=>{$(id).innerHTML=text?`<div class="msg ${kind}">${text}</div>`:""};
 const monthLabel=p=>new Date(p+"T12:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"});
-let parsed=null, isAdmin=false, user=null;
+let parsed=null, passcode=null;
 
-/* ---------- auth ---------- */
-async function refreshAuth(){
-  const {data:{session}}=await sb.auth.getSession();
-  user=session?.user||null;
-  $("signedOut").hidden=!!user; $("signedIn").hidden=!user;
-  if(!user){$("uploadCard").hidden=true;return}
-  const {data,error}=await sb.rpc("is_admin");
-  isAdmin=!error&&data===true;
-  $("who").innerHTML=`Signed in as <b>${esc(user.email)}</b>`;
-  if(!isAdmin){msg("authMsg","warn","This email can view the dashboard but isn't approved to upload. Ask Brian to add it.");$("uploadCard").hidden=true;return}
-  msg("authMsg","","");$("uploadCard").hidden=false;loadHistory();
+/* ---------- passcode ---------- */
+async function call(action,extra={}){
+  const r=await fetch(UPLOAD_FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,passcode,...extra})});
+  const j=await r.json().catch(()=>({error:"The upload service didn't answer properly."}));
+  if(!r.ok||j.error)throw Object.assign(new Error(j.error||`Error ${r.status}`),{status:r.status});
+  return j;
 }
-$("loginForm").addEventListener("submit",async e=>{
-  e.preventDefault();$("sendLink").disabled=true;
-  const {error}=await sb.auth.signInWithOtp({email:$("email").value.trim(),options:{emailRedirectTo:location.href.split("#")[0]}});
-  $("sendLink").disabled=false;
-  msg("authMsg",error?"err":"ok",error?`The sign-in link didn't send: ${esc(error.message)}`:"Check your inbox for a sign-in link from Supabase. Open it on this device; it brings you back here signed in.");
-});
-$("signOut").onclick=async()=>{await sb.auth.signOut();refreshAuth()};
-sb.auth.onAuthStateChange(()=>refreshAuth());
+const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;if(on)loadHistory();else $("history").textContent="Enter the passcode to see upload history."}
+async function tryPasscode(code,quiet){
+  passcode=code;
+  try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
+  catch(e){passcode=null;store.set(null);showUnlocked(false);if(!quiet)msg("authMsg","err",e.status===401?"That passcode isn't right. Check it and try again.":esc(e.message))}
+}
+$("codeForm").addEventListener("submit",async e=>{e.preventDefault();$("unlock").disabled=true;await tryPasscode($("passcode").value,false);$("unlock").disabled=false});
+$("lock").onclick=()=>{passcode=null;store.set(null);$("passcode").value="";showUnlocked(false)};
 
 /* ---------- parsing ---------- */
 function toMonth(v){
@@ -221,34 +214,22 @@ $("save").onclick=async()=>{
   const period=$("month").value+"-01";
   $("save").disabled=true;msg("saveMsg","warn","Saving…");
   try{
-    if(parsed.metrics.length){
-      const rows=parsed.metrics.map(({_label,_tab,...m})=>({...m,period}));
-      const {error}=await sb.from("metric_values").upsert(rows,{onConflict:"period,source,brand,metric,dimension"});
-      if(error)throw error;
-    }
-    for(const e of parsed.events){
-      const ev={code:e.code,name:e.name,start_date:e.start_date};
-      for(const k of ["end_date","capacity","target_registrations","target_revenue","prior_code"])if(e[k]!=null)ev[k]=e[k];
-      let {error}=await sb.from("events").upsert(ev,{onConflict:"code"});if(error)throw error;
-      const snap={event_code:e.code,period,registrations:e.registrations};
-      if(e.revenue!=null)snap.revenue=e.revenue;if(e.attendance!=null)snap.attendance=e.attendance;
-      ({error}=await sb.from("event_snapshots").upsert(snap,{onConflict:"event_code,period"}));if(error)throw error;
-    }
-    await sb.from("uploads").insert({period,uploaded_by:user.email,filename:parsed.filename,rows_written:parsed.metrics.length+parsed.events.length});
-    msg("saveMsg","ok",`Saved ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see it.`);
+    const metrics=parsed.metrics.map(({_label,_tab,brand,...m})=>m);
+    const r=await call("save",{period,metrics,events:parsed.events,filename:parsed.filename});
+    msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them.`);
     loadHistory();
   }catch(err){
-    msg("saveMsg","err",`Nothing after the error was saved: ${esc(err.message||err)}. Try again; saving the same month twice is safe.`);
+    if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}
+    msg("saveMsg","err",`Not saved: ${esc(err.message)} Saving the same month again is safe.`);
   }
   $("save").disabled=false;
 };
 
 async function loadHistory(){
-  const {data,error}=await sb.from("uploads").select("period,uploaded_at,uploaded_by,filename,rows_written").order("uploaded_at",{ascending:false}).limit(12);
-  if(error||!data){$("history").textContent="Upload history isn't available.";return}
+  let data;try{data=(await call("history")).uploads}catch(e){$("history").textContent="Upload history isn't available right now.";return}
   $("history").innerHTML=data.length?`<div class="tbl"><table><thead><tr><th>Month</th><th>Uploaded</th><th>File</th><th style="text-align:right">Numbers</th></tr></thead><tbody>${data.map(u=>`<tr><td>${monthLabel(u.period)}</td><td>${new Date(u.uploaded_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</td><td>${esc(u.filename||"")}</td><td class="n">${fmt(u.rows_written)}</td></tr>`).join("")}</tbody></table></div>`:"No uploads yet.";
 }
-refreshAuth();
+{const saved=store.get();if(saved)tryPasscode(saved,true)}
 </script>
 </body>
 </html>
