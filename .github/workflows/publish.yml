@@ -31,6 +31,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -r index.html data robots.txt .nojekyll _site/
+          rm -rf _site/data/_probe
           echo "{\"checked\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > _site/checked.json
 
       - uses: actions/configure-pages@v5
