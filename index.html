@@ -182,13 +182,12 @@ footer p{margin:0}
 <header class="band">
   <div class="wrap">
     <div>
-      <div class="eyebrow">AIA Canada · CCIF · YPA · I-CAR</div>
+      <div class="eyebrow">AIA Canada · Marketing, Communications and Engagement</div>
       <h1>MCE Executive Dashboard</h1>
     </div>
     <div class="controls">
       <label>Month <select id="monthSel"></select></label>
-      <label>Brand <select id="brandSel"><option value="">All brands</option><option>AIA Canada</option><option>CCIF</option><option>YPA</option><option>I-CAR</option></select></label>
-      <a class="upl" href="upload.html">Upload month</a>
+            <a class="upl" href="upload.html">Upload month</a>
     </div>
   </div>
 </header>
@@ -198,22 +197,22 @@ footer p{margin:0}
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
 
   <section class="stream" aria-labelledby="mkH">
-    <div class="sec-head"><h2 id="mkH">Marketing</h2><span class="sub-h">Website, from GA4</span></div>
+    <div class="sec-head"><h2 id="mkH">Marketing</h2><span class="sub-h">Website, from GA4 · all sites combined</span></div>
     <div class="cols">
-      <div class="card"><h3>Website sessions by brand <span class="sub">· last 13 months</span></h3><div id="webChart"></div><div class="legend" id="webLegend"></div></div>
+      <div class="card"><h3>Website sessions and users <span class="sub">· last 13 months</span></h3><div id="webChart"></div><div class="legend" id="webLegend"></div></div>
       <div class="card"><h3>Where visits came from <span class="sub" id="chanSub"></span></h3><div class="hbars" id="channels"></div></div>
     </div>
-    <div class="card"><h3>Website by brand <span class="sub" id="webTblSub"></span></h3><div class="tblwrap"><table class="mini" id="webTable"></table></div></div>
+    <div class="card"><h3>Website this month <span class="sub" id="webTblSub"></span></h3><div class="tblwrap"><table class="mini" id="webTable"></table></div></div>
   </section>
 
   <section class="stream" aria-labelledby="cmH">
-    <div class="sec-head"><h2 id="cmH">Communications</h2><span class="sub-h">Email from Insightly, social from your scheduling tool</span></div>
+    <div class="sec-head"><h2 id="cmH">Communications</h2><span class="sub-h">Email from Insightly, social from your scheduling tool · all brands combined</span></div>
     <div class="cols">
       <div class="card"><h3>Broad emails to the main member list <span class="sub">· per month</span></h3><div id="loadChart"></div>
         <div class="legend"><span><i class="sw" style="--c:var(--seq)"></i>Within cap</span><span><i class="sw" style="--c:var(--crit)"></i>Over cap</span><span><i class="dash" style="--c:var(--ink-2)"></i>About 9 a month</span></div></div>
       <div class="card"><h3>Email open and click rates <span class="sub">· last 13 months</span></h3><div id="rateChart"></div><div class="legend" id="rateLegend"></div></div>
     </div>
-    <div class="card"><h3>Email by brand <span class="sub" id="emailSub"></span></h3><div class="tblwrap"><table class="mini" id="emailTable"></table></div></div>
+    <div class="card"><h3>Email this month <span class="sub" id="emailSub"></span></h3><div class="tblwrap"><table class="mini" id="emailTable"></table></div></div>
     <div class="cols">
       <div class="card"><h3>Social by platform <span class="sub" id="socialSub"></span></h3><div class="tblwrap"><table class="mini" id="socialTable"></table></div></div>
       <div class="card"><h3>Send plan, next 8 weeks <span class="sub">· live from the eBlast calendar</span></h3><div id="discChart"></div><p class="note" id="discNote"></p></div>
@@ -348,12 +347,7 @@ const mLabel=(p,o={month:"short",year:"numeric"})=>new Date(p+"T12:00:00").toLoc
 const mShort=p=>{const d=new Date(p+"T12:00:00");return d.toLocaleDateString("en-CA",{month:"short"})+(d.getMonth()===0?" "+String(d.getFullYear()).slice(2):"")};
 
 // Sum a metric over the selected brands (or a fixed brand). Returns null when nothing was uploaded.
-function val(period,source,metric,dim="",brand){
-  const brands=brand?[brand]:state.brand?[state.brand]:BRANDS;
-  let s=0,found=false;
-  for(const b of brands){const v=IDX[`${period}|${source}|${b}|${metric}|${dim}`];if(v!=null){s+=v;found=true}}
-  return found?s:null;
-}
+function val(period,source,metric,dim=""){return IDX[`${period}|${source}|All|${metric}|${dim}`]??null}
 const allVal=(period,source,metric,dim="")=>IDX[`${period}|${source}|All|${metric}|${dim}`]??null;
 const ratio=(a,b)=>a==null||!b?null:a/b;
 function series(fn,n=13){const out=[];for(let i=n-1;i>=0;i--){const p=shiftMonth(state.month,-i);out.push({p,v:fn(p)})}return out}
@@ -363,7 +357,7 @@ function change(cur,prev,{rate=false,better="higher"}={}){
   if(cur==null||prev==null)return null;
   const d=rate?(cur-prev)*100:(prev?((cur-prev)/Math.abs(prev))*100:null);
   if(d==null)return null;
-  const good=better==="higher"?d>=0:d<=0;
+  const good=Math.abs(d)<0.05||(better==="higher"?d>=0:d<=0);
   return{d,good,text:(d>=0?"+":"−")+Math.abs(d).toFixed(Math.abs(d)<10?1:0)+(rate?" pts":"%")};
 }
 function chips(fn,opts){
@@ -397,7 +391,7 @@ function renderKPIs(){
   k.push({k:"Website sessions",v:sess(p)!=null?fmt(sess(p)):null,d:chips(sess),s:sparkFrom(series(sess),"--s1")});
   const ke=x=>val(x,"ga4","key_events");
   k.push({k:"Website key events",v:ke(p)!=null?fmt(ke(p)):null,d:chips(ke),s:sparkFrom(series(ke),"--s1")});
-  const open=x=>ratio(val(x,"insightly","unique_opens"),val(x,"insightly","delivered"))??(state.brand?null:allVal(x,"insightly","unique_open_rate_main_list"));
+  const open=x=>ratio(val(x,"insightly","unique_opens"),val(x,"insightly","delivered"))??allVal(x,"insightly","unique_open_rate_main_list");
   const o=open(p);
   k.push({k:"Email open rate",v:o!=null?pct(o):null,d:chips(open,{rate:true}),p:o!=null?(o>=BENCH.open?pill("good","At or above peers"):pill("serious",`${((BENCH.open-o)*100).toFixed(0)} pts below peers`)):null});
   const bs=x=>allVal(x,"insightly","broad_sends_main_list"),b=bs(p);
@@ -416,26 +410,32 @@ const CHANNELS=["Organic Search","Direct","Email","Organic Social","Referral","P
 const PLATFORMS=["LinkedIn","Facebook","Instagram","X","YouTube"];
 function emptyNote(host,text){$(host).innerHTML=`<p class="empty-note">${text}</p>`}
 
+function metricTable(rows){
+  const p=state.month;
+  return `<thead><tr><th>Measure</th><th class="num">${mLabel(p)}</th><th class="num">MoM</th><th class="num">YoY</th></tr></thead><tbody>`+rows.map(([label,fn,show,opts={}])=>{
+    const c=fn(p),mom=change(c,fn(shiftMonth(p,-1)),opts),yoy=change(c,fn(shiftMonth(p,-12)),opts);
+    const ch=x=>x?`<span class="chg ${x.good?"up":"down"}">${x.text}</span>`:`<span class="chg none">–</span>`;
+    return `<tr><td>${label}</td><td class="num"><b>${c==null?"–":show(c)}</b></td><td class="num">${ch(mom)}</td><td class="num">${ch(yoy)}</td></tr>`}).join("")+"</tbody>";
+}
+const dur=t=>Math.floor(t/60)+"m "+String(Math.round(t%60)).padStart(2,"0")+"s";
 function renderMarketing(){
-  const p=state.month,sr=(b)=>series(x=>val(x,"ga4","sessions","",b));
-  const brands=state.brand?[state.brand]:BRANDS;
-  const ser=brands.map(b=>({name:b,color:BRAND_VAR[b],values:sr(b).map(x=>x.v)})).filter(s=>s.values.some(v=>v!=null));
-  const labels=series(()=>0).map(x=>mShort(x.p));
-  if(ser.length){lineChart($("webChart"),{labels,endLabels:true,height:230,tipLabel:i=>mLabel(series(()=>0)[i].p,{month:"long",year:"numeric"}),series:ser});$("webLegend").innerHTML=ser.map(s=>`<span><i style="--c:var(${s.color})"></i>${esc(s.name)}</span>`).join("")}
+  const p=state.month,months=series(()=>0).map(x=>x.p);
+  const sess=months.map(x=>val(x,"ga4","sessions")),users=months.map(x=>val(x,"ga4","users"));
+  const ser=[{name:"Sessions",color:"--s1",values:sess},{name:"Users",color:"--s2",values:users}].filter(x=>x.values.some(v=>v!=null));
+  if(ser.length){lineChart($("webChart"),{labels:months.map(mShort),endLabels:true,height:230,tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),series:ser});$("webLegend").innerHTML=ser.map(x=>`<span><i style="--c:var(${x.color})"></i>${x.name}</span>`).join("")}
   else{emptyNote("webChart","No GA4 numbers uploaded for the last 13 months.");$("webLegend").innerHTML=""}
   $("chanSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
-  const ch=CHANNELS.map(c=>({c,v:val(p,"ga4","sessions",c),prev:val(shiftMonth(p,-1),"ga4","sessions",c)})).filter(x=>x.v!=null);
+  const ch=CHANNELS.map(c=>({c,v:val(p,"ga4","sessions",c)})).filter(x=>x.v!=null);
   const tot=ch.reduce((a,x)=>a+x.v,0);
-  if(ch.length){const mx=Math.max(...ch.map(x=>x.v));$("channels").innerHTML=ch.sort((a,b)=>b.v-a.v).map(x=>{const c=change(x.v,x.prev);return `<div class="hb"><span class="t">${esc(x.c)}</span><span class="track"><span class="fill" style="width:${x.v/mx*100}%"></span></span><span class="val">${pct(x.v/tot,0)}</span></div>`}).join("")+`<p class="note">${fmt(tot)} sessions with a channel. Share of the month's total.</p>`}
+  if(ch.length){const mx=Math.max(...ch.map(x=>x.v));$("channels").innerHTML=ch.sort((a,b)=>b.v-a.v).map(x=>`<div class="hb"><span class="t">${esc(x.c)}</span><span class="track"><span class="fill" style="width:${x.v/mx*100}%"></span></span><span class="val">${pct(x.v/tot,0)}</span></div>`).join("")+`<p class="note">Share of ${fmt(tot)} sessions with a channel.</p>`}
   else emptyNote("channels","No channel breakdown uploaded for this month.");
   $("webTblSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
-  const rows=brands.map(b=>{
-    const g=(m,x=p)=>val(x,"ga4",m,"",b);
-    const er=x=>ratio(g("engaged_sessions",x),g("sessions",x));
-    return{b,sess:g("sessions"),users:g("users"),ke:g("key_events"),er:er(p),time:g("avg_engagement_sec"),
-      sessC:chips(x=>g("sessions",x)),keC:chips(x=>g("key_events",x)),erC:chips(er,{rate:true})};
-  }).filter(r=>r.sess!=null||r.ke!=null);
-  $("webTable").innerHTML=rows.length?`<thead><tr><th>Brand</th><th class="num">Sessions</th><th class="num">Users</th><th class="num">Key events</th><th class="num">Engagement rate</th><th class="num">Avg time</th></tr></thead><tbody>`+rows.map(r=>`<tr><td><i class="dot" style="--c:var(${BRAND_VAR[r.b]})"></i>${esc(r.b)}</td><td class="num">${fmt(r.sess)}<div class="cc">${r.sessC}</div></td><td class="num">${fmt(r.users)}</td><td class="num">${fmt(r.ke)}<div class="cc">${r.keC}</div></td><td class="num">${pct(r.er)}<div class="cc">${r.erC}</div></td><td class="num">${r.time==null?"–":Math.floor(r.time/60)+"m "+String(Math.round(r.time%60)).padStart(2,"0")+"s"}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No GA4 numbers uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.</td></tr></tbody>`;
+  const g=m=>x=>val(x,"ga4",m);
+  const has=["sessions","users","key_events"].some(m=>val(p,"ga4",m)!=null);
+  $("webTable").innerHTML=has?metricTable([
+    ["Sessions",g("sessions"),fmt],["Users",g("users"),fmt],["New users",g("new_users"),fmt],["Key events (conversions)",g("key_events"),fmt],
+    ["Engagement rate",x=>ratio(val(x,"ga4","engaged_sessions"),val(x,"ga4","sessions")),v=>pct(v),{rate:true}],
+    ["Average engagement time",g("avg_engagement_sec"),dur]]):`<tbody><tr><td class="empty-note">No GA4 numbers uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.</td></tr></tbody>`;
 }
 
 function renderComms(){
@@ -453,10 +453,14 @@ function renderComms(){
     $("rateLegend").innerHTML=`<span><i style="--c:var(--s1)"></i>Unique open rate</span><span><i style="--c:var(--s2)"></i>Unique click rate</span><span class="muted">Peers: opens ${pct(BENCH.open)}, clicks ${pct(BENCH.click)}</span>`;
   } else {emptyNote("rateChart","Open and click rates appear once monthly Insightly numbers (delivered, unique opens, unique clicks) are uploaded. The 2026 audit only has year-to-date rates: 23.3% opens and 4.4% clicks.");$("rateLegend").innerHTML=""}
   $("emailSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
-  const brands=state.brand?[state.brand]:BRANDS;
-  const rows=brands.map(b=>{const g=(m,x=p)=>val(x,"insightly",m,"",b);const o=x=>ratio(g("unique_opens",x),g("delivered",x)),c=x=>ratio(g("unique_clicks",x),g("delivered",x)),u=x=>ratio(g("opt_outs",x),g("delivered",x));
-    return{b,sends:g("campaign_sends"),del:g("delivered"),o:o(p),c:c(p),u:u(p),bo:ratio(g("hard_bounces"),g("delivered")),oC:chips(o,{rate:true}),cC:chips(c,{rate:true}),delC:chips(x=>g("delivered",x))}}).filter(r=>r.del!=null||r.sends!=null);
-  $("emailTable").innerHTML=rows.length?`<thead><tr><th>Brand</th><th class="num">Campaigns</th><th class="num">Delivered</th><th class="num">Open rate</th><th class="num">Click rate</th><th class="num">Opt-out rate</th><th class="num">Hard bounce rate</th></tr></thead><tbody>`+rows.map(r=>`<tr><td><i class="dot" style="--c:var(${BRAND_VAR[r.b]})"></i>${esc(r.b)}</td><td class="num">${fmt(r.sends)}</td><td class="num">${fmt(r.del)}<div class="cc">${r.delC}</div></td><td class="num">${pct(r.o)}<div class="cc">${r.oC}</div></td><td class="num">${pct(r.c)}<div class="cc">${r.cC}</div></td><td class="num ${r.u!=null&&r.u>BENCH.optout?"down":""}">${pct(r.u,2)}</td><td class="num ${r.bo!=null&&r.bo>0.02?"down":""}">${pct(r.bo,1)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No email numbers by brand uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.${allVal(p,"insightly","broad_sends_main_list")!=null?" The main-list send count above comes from the 2026 audit.":""}</td></tr></tbody>`;
+  const e=m=>x=>val(x,"insightly",m),er=(m)=>x=>ratio(val(x,"insightly",m),val(x,"insightly","delivered"));
+  const hasE=["campaign_sends","delivered","unique_opens"].some(m=>val(p,"insightly",m)!=null);
+  $("emailTable").innerHTML=hasE?metricTable([
+    ["Campaigns sent",e("campaign_sends"),fmt],["Emails delivered",e("delivered"),fmt],
+    ["Unique open rate",er("unique_opens"),v=>pct(v),{rate:true}],["Unique click rate",er("unique_clicks"),v=>pct(v),{rate:true}],
+    ["Opt-out rate",er("opt_outs"),v=>pct(v,2),{rate:true,better:"lower"}],["Hard bounce rate",er("hard_bounces"),v=>pct(v,1),{rate:true,better:"lower"}],
+    ["Broad sends to the main list",e("broad_sends_main_list"),fmt,{better:"lower"}],["Opt-outs from those sends",e("opt_outs_main_list"),fmt,{better:"lower"}]])
+    :`<tbody><tr><td class="empty-note">No Insightly email totals uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.${val(p,"insightly","broad_sends_main_list")!=null?" The main-list send count above comes from the 2026 audit.":""}</td></tr></tbody>`;
   $("socialSub").textContent="· "+mLabel(p,{month:"long",year:"numeric"});
   const prev=shiftMonth(p,-1);
   const srows=PLATFORMS.map(pl=>{const g=(m,x=p)=>val(x,"social",m,pl);return{pl,f:g("followers"),fd:g("followers")!=null&&g("followers",prev)!=null?g("followers")-g("followers",prev):null,i:g("impressions"),e:g("engagements"),er:ratio(g("engagements"),g("impressions")),posts:g("posts"),lc:g("link_clicks"),eC:chips(x=>g("engagements",x))}}).filter(r=>r.f!=null||r.e!=null||r.i!=null);
@@ -470,8 +474,7 @@ function finalSnap(code){return D.snaps.filter(s=>s.event_code===code).sort((a,b
 function eventsFor(p){
   const monthEnd=shiftMonth(p,1);
   return D.events.filter(e=>{
-    if(state.brand&&e.brand!==state.brand)return false;
-    const s=snap(e.code,p);const endOrStart=e.end_date||e.start_date;
+        const s=snap(e.code,p);const endOrStart=e.end_date||e.start_date;
     return s||(e.start_date>=p&&D.snaps.some(x=>x.event_code===e.code&&x.period<=p));
   }).map(e=>{
     let s=snap(e.code,p);
@@ -497,7 +500,7 @@ function renderEvents(){
     const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
     const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
     const lyd=e.ly?(e.regs-e.ly)/e.ly:null;
-    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${esc(e.brand)} · ${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div></td>
+    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div></td>
       <td class="num">${e.status==="past"?"Done":e.mb<=0?"This month":e.mb}</td>
       <td><div class="prog"><div class="row"><b>${fmt(e.regs)}</b><span style="color:var(--muted)">${e.target_registrations?`of ${fmt(e.target_registrations)} target`:e.capacity?`of ${fmt(e.capacity)} capacity`:""}</span></div>${share?`<div class="bar"><b style="width:${share*100}%"></b>${exp!=null?`<i style="left:calc(${exp*100}% - 1px)"></i>`:""}</div>`:""}</div></td>
       <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
@@ -544,7 +547,7 @@ function renderDiscipline(){
 /* ---------- state & boot ---------- */
 const state={month:null,brand:""};
 function render(){renderCoverage();renderKPIs();renderMarketing();renderComms();renderEvents();renderDiscipline()}
-function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));if(state.brand)u.searchParams.set("brand",state.brand);else u.searchParams.delete("brand");history.replaceState(null,"",u)}
+function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");history.replaceState(null,"",u)}
 async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
@@ -557,13 +560,11 @@ async function boot(){
   if(!periods.includes(lastFull))periods.push(lastFull);periods.sort();
   const wanted=q.get("month")?q.get("month")+"-01":null;
   state.month=wanted&&periods.includes(wanted)?wanted:periods[periods.length-1];
-  state.brand=BRANDS.includes(q.get("brand"))?q.get("brand"):"";
   const latestWithData=[...new Set(D.metrics.map(m=>m.period))].sort().pop();
   if(!wanted&&latestWithData&&!D.metrics.some(m=>m.period===state.month)&&!D.snaps.some(s=>s.period===state.month))state.month=latestWithData;
   $("monthSel").innerHTML=periods.slice().reverse().map(p=>`<option value="${p}">${mLabel(p,{month:"long",year:"numeric"})}</option>`).join("");
-  $("monthSel").value=state.month;$("brandSel").value=state.brand;
+  $("monthSel").value=state.month;
   $("monthSel").onchange=e=>{state.month=e.target.value;setURL();render()};
-  $("brandSel").onchange=e=>{state.brand=e.target.value;setURL();render()};
   render();
   let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150)});
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);

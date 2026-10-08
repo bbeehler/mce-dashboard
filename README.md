@@ -1,6 +1,6 @@
 # MCE Executive Dashboard
 
-Monthly Marketing, Communications and Engagement (Events) results for AIA Canada, CCIF, YPA and I-CAR, with month-over-month and year-over-year comparisons.
+Monthly Marketing, Communications and Engagement (Events) results for AIA Canada overall, with month-over-month and year-over-year comparisons.
 
 - Dashboard: https://bbeehler.github.io/mce-dashboard/
 - Upload a month: https://bbeehler.github.io/mce-dashboard/upload.html
@@ -17,7 +17,7 @@ The send plan card reads the live eBlast calendar (`../eblast-calendar/data.json
 
 | Table | Holds |
 |---|---|
-| `metric_values` | One row per month × source × brand × metric (× breakdown such as channel or platform) |
+| `metric_values` | One row per month × source × metric (× breakdown such as channel or platform). Brand is always `All`: the dashboard reports overall numbers only. |
 | `events` | Event code, name, brand, dates, capacity, targets, and last year's event code |
 | `event_snapshots` | Registrations, revenue and attendance at each month end, per event |
 | `targets` | Annual targets by stream, brand and metric |

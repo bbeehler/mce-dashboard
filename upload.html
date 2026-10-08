@@ -165,7 +165,7 @@ function parseWorkbook(wb){
       const [section,brand,label,breakdown,value,stream,source,metric,dimension]=r;
       if(!stream||!metric)return;
       const v=num(value);if(v==null)return;
-      if(Number.isNaN(v)||v<0){out.problems.push(`${name} row ${i+5} (${brand} · ${label}${breakdown?" · "+breakdown:""}): “${value}” isn't a number.`);return}
+      if(Number.isNaN(v)||v<0){out.problems.push(`${name} row ${i+5} (${label}${breakdown?" · "+breakdown:""}): “${value}” isn't a number.`);return}
       out.metrics.push({stream,source,brand:brand||"All",metric,dimension:dimension||"",value:v,_label:`${label}${breakdown?" · "+breakdown:""}`,_tab:name});
     });
   }
@@ -173,11 +173,11 @@ function parseWorkbook(wb){
   if(ev){
     const rows=XLSX.utils.sheet_to_json(ev,{header:1,raw:true,defval:null});
     rows.slice(4).forEach((r,i)=>{
-      const [code,name,brand,start,end,cap,tReg,tRev,prior,regs,rev,att]=r;
+      const [code,name,start,end,cap,tReg,tRev,prior,regs,rev,att]=r;
       if(r.every(x=>x==null||x===""))return;
       const row=i+5;
       if(!code||!name){out.problems.push(`Events row ${row}: needs an event code and name.`);return}
-      const e={code:String(code).trim(),name:String(name).trim(),brand:brand||"AIA Canada",start_date:toDate(start),end_date:toDate(end),capacity:num(cap),target_registrations:num(tReg),target_revenue:num(tRev),prior_code:prior?String(prior).trim():null,registrations:num(regs),revenue:num(rev),attendance:num(att)};
+      const e={code:String(code).trim(),name:String(name).trim(),start_date:toDate(start),end_date:toDate(end),capacity:num(cap),target_registrations:num(tReg),target_revenue:num(tRev),prior_code:prior?String(prior).trim():null,registrations:num(regs),revenue:num(rev),attendance:num(att)};
       if(!e.start_date){out.problems.push(`Events row ${row} (${e.code}): start date is missing or not YYYY-MM-DD.`);return}
       if(e.registrations==null){out.problems.push(`Events row ${row} (${e.code}): registrations to date is blank.`);return}
       for(const k of ["capacity","target_registrations","target_revenue","registrations","revenue","attendance"])if(Number.isNaN(e[k])){out.problems.push(`Events row ${row} (${e.code}): ${k.replace(/_/g," ")} isn't a number.`);return}
@@ -207,8 +207,8 @@ function renderPreview(){
   if(!parsed)return;
   const by=t=>parsed.metrics.filter(m=>m._tab===t).length;
   $("stats").innerHTML=[["Marketing",by("Marketing")],["Communications",by("Communications")],["Events",parsed.events.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k} ${k==="Events"?"rows":"numbers"}</span></div>`).join("");
-  const rows=[...parsed.metrics.map(m=>[m._tab,m.brand,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",e.brand,`${e.name} (${e.code}) · registrations`,fmt(e.registrations)])];
-  $("previewTable").innerHTML=`<thead><tr><th>Tab</th><th>Brand</th><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="n">${esc(r[3])}</td></tr>`).join("")}</tbody>`;
+  const rows=[...parsed.metrics.map(m=>[m._tab,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",`${e.name} (${e.code}) · registrations`,fmt(e.registrations)])];
+  $("previewTable").innerHTML=`<thead><tr><th>Tab</th><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join("")}</tbody>`;
   $("preview").hidden=!rows.length;
   const month=$("month").value,ok=!!month&&!parsed.problems.length&&rows.length>0;
   $("save").disabled=!ok;
@@ -227,7 +227,7 @@ $("save").onclick=async()=>{
       if(error)throw error;
     }
     for(const e of parsed.events){
-      const ev={code:e.code,name:e.name,brand:e.brand,start_date:e.start_date};
+      const ev={code:e.code,name:e.name,start_date:e.start_date};
       for(const k of ["end_date","capacity","target_registrations","target_revenue","prior_code"])if(e[k]!=null)ev[k]=e[k];
       let {error}=await sb.from("events").upsert(ev,{onConflict:"code"});if(error)throw error;
       const snap={event_code:e.code,period,registrations:e.registrations};
