@@ -470,7 +470,7 @@ function renderComms(){
 
 /* ---------- events (live from PheedLoop) ---------- */
 const LIVE_PERIOD=(()=>{const d=new Date();return periodOf(d.getFullYear(),d.getMonth()+1)})();
-const liveEvents=()=>{const cut=new Date(Date.now()-45*864e5).toISOString().slice(0,10);return eventsFor(LIVE_PERIOD).filter(e=>(e.end_date||e.start_date)>=cut)};
+const liveEvents=()=>{const cut=new Date(Date.now()-45*864e5).toISOString().slice(0,10);return eventsFor(LIVE_PERIOD).filter(e=>(e.end_date||e.start_date)>=cut&&!/\btest(ing)?\b/i.test(e.name))};
 const agoText=iso=>{const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?"just now":m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} hr ago`:new Date(iso).toLocaleDateString("en-CA",{month:"short",day:"numeric"})};
 function monthsBefore(eventDate,period){const e=new Date(eventDate+"T12:00:00"),q=new Date(period+"T12:00:00");return (e.getFullYear()-q.getFullYear())*12+(e.getMonth()-q.getMonth())}
 function snap(code,period){return D.snaps.find(s=>s.event_code===code&&s.period===period)||null}

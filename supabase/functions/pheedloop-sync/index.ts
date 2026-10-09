@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       const start = day(e.date ?? e.start_date ?? e.starts_at);
       const end = day(e.end_date ?? e.ends_at) ?? start;
       if (!code || !start || (end ?? start) < cutoff) continue;
+      if (/\btest(ing)?\b/i.test(String(e.event_name ?? e.name ?? ""))) continue; // skip PheedLoop test events
 
       let regs = num(e.total_registration_count);
       if (regs == null) { regs = (await allPages(`/events/${code}/attendees/`)).length; counted++; }
