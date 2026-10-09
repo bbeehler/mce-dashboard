@@ -5,10 +5,15 @@
 // No attendee details are stored: only totals.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const KEY = Deno.env.get("PHEEDLOOP_API_KEY") ?? "";
-const SECRET = Deno.env.get("PHEEDLOOP_API_SECRET") ?? "";
-const ORG = Deno.env.get("PHEEDLOOP_ORG") ?? "";
-const BASE = `https://api.pheedloop.com/api/v3/organization/${ORG}`;
+// Read on every run so newly added or changed secrets take effect without a redeploy.
+let KEY = "", SECRET = "", ORG = "", BASE = "";
+function loadKeys() {
+  KEY = (Deno.env.get("PHEEDLOOP_API_KEY") ?? "").trim();
+  SECRET = (Deno.env.get("PHEEDLOOP_API_SECRET") ?? "").trim();
+  ORG = (Deno.env.get("PHEEDLOOP_ORG") ?? "").trim();
+  BASE = `https://api.pheedloop.com/api/v3/organization/${encodeURIComponent(ORG)}`;
+  return ["PHEEDLOOP_API_KEY", "PHEEDLOOP_API_SECRET", "PHEEDLOOP_ORG"].filter((n, i) => ![KEY, SECRET, ORG][i]);
+}
 const MIN_GAP_MS = 5 * 60 * 1000;          // ignore calls within 5 minutes of the last sync
 const LOOKBACK_DAYS = 45;                   // keep updating events that ended recently (attendance)
 
@@ -38,7 +43,8 @@ const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : t
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type" } });
-  if (!KEY || !SECRET || !ORG) return json({ error: "PheedLoop keys are not set (PHEEDLOOP_API_KEY, PHEEDLOOP_API_SECRET, PHEEDLOOP_ORG)." }, 500);
+  const missing = loadKeys();
+  if (missing.length) return json({ error: `Missing Supabase secrets: ${missing.join(", ")}` }, 500);
 
   const { data: last } = await db.from("sync_log").select("started_at,ok").eq("source", "pheedloop").order("started_at", { ascending: false }).limit(1).maybeSingle();
   if (last?.ok && Date.now() - new Date(last.started_at).getTime() < MIN_GAP_MS) return json({ skipped: true, reason: "synced less than 5 minutes ago", last: last.started_at });
