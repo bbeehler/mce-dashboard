@@ -493,7 +493,8 @@ function eventsFor(p){
     if(past){st=tgt?(regs>=tgt?{kind:"good",label:"Hit target"}:{kind:"serious",label:`${pct(regs/tgt,0)} of target`}):{kind:"none",label:"Finished"}}
     else if(tgt&&ly!=null&&lyFinal){expected=tgt*ly/lyFinal;const r=regs/expected;st=r>=1.05?{kind:"good",label:"Ahead"}:r>=0.95?{kind:"good",label:"On pace"}:r>=0.85?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
     else if(tgt){st={kind:"none",label:`${pct(regs/tgt,0)} of target`}}
-    return{...e,regs,gain:regs!=null&&prevS?regs-prevS.registrations:null,revenue:s?.revenue??null,attendance:s?.attendance??null,ly,lyFinal,expected,st,status:past?"past":"upcoming",mb};
+    const revS=D.snaps.filter(x=>x.event_code===e.code&&x.period<=p&&x.revenue!=null).sort((a,b)=>b.period.localeCompare(a.period))[0];
+    return{...e,regs,gain:regs!=null&&prevS?regs-prevS.registrations:null,revenue:revS?Number(revS.revenue):null,revAsOf:revS&&revS.period!==p?revS.period:null,attendance:s?.attendance??null,ly,lyFinal,expected,st,status:past?"past":"upcoming",mb};
   }).sort((a,b)=>a.start_date.localeCompare(b.start_date));
 }
 function renderEvents(){
@@ -510,7 +511,7 @@ function renderEvents(){
       <td><div class="prog"><div class="row"><b>${fmt(e.regs)}</b><span style="color:var(--muted)">${e.target_registrations?`of ${fmt(e.target_registrations)} target`:e.capacity?`of ${fmt(e.capacity)} capacity`:""}</span></div>${share?`<div class="bar"><b style="width:${share*100}%"></b>${exp!=null?`<i style="left:calc(${exp*100}% - 1px)"></i>`:""}</div>`:""}</div></td>
       <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
       <td class="num">${lyd==null?'<span style="color:var(--muted)">–</span>':`<span class="${lyd>=0?"up":"down"}">${lyd>=0?"+":""}${pct(lyd,0)}</span>`}</td>
-      <td class="num">${e.revenue==null?"–":money(e.revenue)}${e.target_revenue?`<div class="evmeta">of ${money(e.target_revenue)}</div>`:""}</td>
+      <td class="num">${e.revenue==null?"–":money(e.revenue)}${e.target_revenue?`<div class="evmeta">of ${money(e.target_revenue)}${e.revAsOf?` · end of ${mLabel(e.revAsOf,{month:"short"})}`:""}</div>`:(e.revAsOf?`<div class="evmeta">end of ${mLabel(e.revAsOf,{month:"short"})}</div>`:"")}</td>
       <td>${pill(e.st.kind,e.st.label)}</td></tr>
       <tr class="detail" hidden data-d="${i}"><td colspan="7"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
   });
@@ -557,7 +558,7 @@ async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
-    Object.assign(D,{metrics,events,snaps});index();
+    Object.assign(D,{metrics,events:events.filter(e=>!e.merged_into),snaps});index();
   }catch(e){$("main").insertAdjacentHTML("afterbegin",'<p class="card empty-note">The dashboard data didn\'t load. Refresh the page in a minute.</p>');return}
   try{const r=await fetch("../eblast-calendar/data.json?t="+Date.now(),{cache:"no-store"});if(r.ok)D.eblast=summarizeEblast(await r.json())}catch(e){}
   const periods=[...new Set(D.metrics.map(m=>m.period))].sort();

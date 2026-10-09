@@ -86,9 +86,14 @@ Deno.serve(async (req) => {
     if (error) return json({ error: `Saving the numbers failed: ${error.message}` }, 500, h);
   }
   for (const e of events) {
-    const code = e.code.trim();
+    // A hand-typed code (e.g. CN2026) may be linked to its PheedLoop event; save to that event instead.
+    const typed = e.code.trim();
+    const { data: alias } = await db.from("events").select("merged_into").eq("code", typed).maybeSingle();
+    const code = alias?.merged_into ?? typed;
     const fields: Record<string, unknown> = {};
-    for (const k of ["name", "start_date", "end_date", "capacity", "target_registrations", "target_revenue", "prior_code"]) if (e[k] != null && e[k] !== "") fields[k] = typeof e[k] === "string" ? e[k].trim() : e[k];
+    // Name and dates of a PheedLoop event come from PheedLoop, so a linked code only updates targets and history.
+    const keys = alias?.merged_into ? ["capacity", "target_registrations", "target_revenue", "prior_code"] : ["name", "start_date", "end_date", "capacity", "target_registrations", "target_revenue", "prior_code"];
+    for (const k of keys) if (e[k] != null && e[k] !== "") fields[k] = typeof e[k] === "string" ? e[k].trim() : e[k];
     const { data: existing } = await db.from("events").select("code").eq("code", code).maybeSingle();
     if (existing) {
       if (Object.keys(fields).length) {
