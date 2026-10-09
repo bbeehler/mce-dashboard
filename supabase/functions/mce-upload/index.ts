@@ -74,9 +74,8 @@ Deno.serve(async (req) => {
     if (!STREAMS.has(m?.stream) || !SOURCES.has(m?.source) || !str(m?.metric, 80) || typeof m?.value !== "number" || !Number.isFinite(m.value) || m.value < 0) problems.push(`Number ${i + 1} isn't valid.`);
   });
   events.forEach((e: any, i: number) => {
-    if (!str(e?.code, 40) || !str(e?.name) || !isDate(e?.start_date) || !e?.start_date || !isDate(e?.end_date)) problems.push(`Event row ${i + 1} needs a code, name and start date.`);
+    if (!str(e?.code, 40) || (e?.name != null && !str(e?.name)) || !isDate(e?.start_date) || !isDate(e?.end_date)) problems.push(`Event row ${i + 1} needs a valid event code and dates.`);
     for (const k of ["capacity", "target_registrations", "target_revenue", "registrations", "revenue", "attendance"]) if (!isNum(e?.[k])) problems.push(`Event row ${i + 1}: ${k.replace(/_/g, " ")} isn't a number.`);
-    if (e?.registrations == null) problems.push(`Event row ${i + 1}: registrations to date is blank.`);
   });
   if (problems.length) return json({ error: problems.slice(0, 10).join(" ") }, 400, h);
 
@@ -87,15 +86,29 @@ Deno.serve(async (req) => {
     if (error) return json({ error: `Saving the numbers failed: ${error.message}` }, 500, h);
   }
   for (const e of events) {
-    const ev: Record<string, unknown> = { code: e.code.trim(), name: e.name.trim(), start_date: e.start_date };
-    for (const k of ["end_date", "capacity", "target_registrations", "target_revenue", "prior_code"]) if (e[k] != null && e[k] !== "") ev[k] = e[k];
-    let { error } = await db.from("events").upsert(ev, { onConflict: "code" });
-    if (error) return json({ error: `Saving event ${e.code} failed: ${error.message}` }, 500, h);
-    const snap: Record<string, unknown> = { event_code: ev.code, period, registrations: e.registrations };
-    if (e.revenue != null) snap.revenue = e.revenue;
-    if (e.attendance != null) snap.attendance = e.attendance;
-    ({ error } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" }));
-    if (error) return json({ error: `Saving registrations for ${e.code} failed: ${error.message}` }, 500, h);
+    const code = e.code.trim();
+    const fields: Record<string, unknown> = {};
+    for (const k of ["name", "start_date", "end_date", "capacity", "target_registrations", "target_revenue", "prior_code"]) if (e[k] != null && e[k] !== "") fields[k] = typeof e[k] === "string" ? e[k].trim() : e[k];
+    const { data: existing } = await db.from("events").select("code").eq("code", code).maybeSingle();
+    if (existing) {
+      if (Object.keys(fields).length) {
+        const { error } = await db.from("events").update(fields).eq("code", code);
+        if (error) return json({ error: `Saving event ${code} failed: ${error.message}` }, 500, h);
+      }
+    } else {
+      if (!fields.name || !fields.start_date) return json({ error: `Event ${code} isn't in PheedLoop yet, so it needs a name and start date.` }, 400, h);
+      const { error } = await db.from("events").insert({ code, ...fields });
+      if (error) return json({ error: `Saving event ${code} failed: ${error.message}` }, 500, h);
+    }
+    // Registrations come from PheedLoop; only write a snapshot when the sheet provides numbers.
+    if (e.registrations != null || e.revenue != null || e.attendance != null) {
+      const { data: cur } = await db.from("event_snapshots").select("registrations").eq("event_code", code).eq("period", period).maybeSingle();
+      const snap: Record<string, unknown> = { event_code: code, period, registrations: e.registrations ?? cur?.registrations ?? 0 };
+      if (e.revenue != null) snap.revenue = e.revenue;
+      if (e.attendance != null) snap.attendance = e.attendance;
+      const { error } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
+      if (error) return json({ error: `Saving ${code} for this month failed: ${error.message}` }, 500, h);
+    }
   }
   await db.from("uploads").insert({ period, uploaded_by: "upload page", filename: typeof filename === "string" ? filename.slice(0, 200) : null, rows_written: metrics.length + events.length });
   return json({ ok: true, saved: metrics.length + events.length }, 200, h);

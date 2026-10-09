@@ -221,7 +221,7 @@ footer p{margin:0}
   </section>
 
   <section class="stream" aria-labelledby="enH">
-    <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h">Events, from PheedLoop</span></div>
+    <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
     <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
   </section>
 
@@ -374,8 +374,8 @@ function renderCoverage(){
   const p=state.month;
   const has=src=>D.metrics.some(m=>m.period===p&&m.source===src);
   const hasEv=D.snaps.some(s=>s.period===p);
-  const items=[["Website","GA4",has("ga4")],["Email","Insightly",has("insightly")],["Social","Scheduling tool",has("social")],["Events","PheedLoop",hasEv],["Send plan","eBlast calendar",!!D.eblast]];
-  $("coverage").innerHTML=`<span class="lbl">${mLabel(p,{month:"long",year:"numeric"})}</span>`+items.map(([a,b,ok])=>`<span class="src ${ok?"live":"sample"}"><i></i>${a} <small>${b} · ${ok?(a==="Send plan"?"live":"uploaded"):"not uploaded"}</small></span>`).join("")+`<a class="src link" href="upload.html">Upload or update this month →</a>`;
+  const items=[["Website","GA4",has("ga4")],["Email","Insightly",has("insightly")],["Social","Scheduling tool",has("social")],["Events","PheedLoop",!!D.sync],["Send plan","eBlast calendar",!!D.eblast]];
+  $("coverage").innerHTML=`<span class="lbl">${mLabel(p,{month:"long",year:"numeric"})}</span>`+items.map(([a,b,ok])=>`<span class="src ${ok?"live":"sample"}"><i></i>${a} <small>${b} · ${ok?(a==="Send plan"||a==="Events"?"live":"uploaded"):(a==="Events"?"not connected":"not uploaded")}</small></span>`).join("")+`<a class="src link" href="upload.html">Upload or update this month →</a>`;
 }
 
 function kpiCard(t){
@@ -399,7 +399,7 @@ function renderKPIs(){
   k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${MONTH_CAP}`,d:chips(bs,{better:"lower"}),p:b!=null?(b>MONTH_CAP?pill("crit","Over cap"):pill("good","Within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")});
   const eng=x=>{let s=null;for(const pl of PLATFORMS){const v=val(x,"social","engagements",pl);if(v!=null)s=(s||0)+v}return s};
   k.push({k:"Social engagements",v:eng(p)!=null?fmt(eng(p)):null,d:chips(eng),s:sparkFrom(series(eng),"--s1")});
-  const ev=eventsFor(p).filter(e=>e.status!=="past");
+  const ev=liveEvents().filter(e=>e.status!=="past");
   const regs=ev.reduce((a,e)=>a+(e.regs||0),0),tgt=ev.reduce((a,e)=>a+(e.target_registrations||0),0);
   const behind=ev.filter(e=>["crit","serious"].includes(e.st.kind)).length;
   k.push({k:"Registrations, upcoming events",v:ev.length?fmt(regs):null,small:tgt?` / ${fmt(tgt)}`:"",d:`${ev.length} event${ev.length===1?"":"s"}${tgt?` · ${pct(regs/tgt,0)} of target`:""}`,p:ev.length?(behind?pill(behind>1?"crit":"serious",`${behind} behind`):pill("good","None behind")):null});
@@ -468,7 +468,10 @@ function renderComms(){
   $("socialTable").innerHTML=srows.length?`<thead><tr><th>Platform</th><th class="num">Followers</th><th class="num">Impressions</th><th class="num">Engagements</th><th class="num">Eng. rate</th><th class="num">Posts</th></tr></thead><tbody>`+srows.map(r=>`<tr><td>${esc(r.pl)}</td><td class="num">${fmt(r.f)}${r.fd!=null?`<div class="cc"><span class="chg ${r.fd>=0?"up":"down"}">${r.fd>=0?"+":"−"}${fmt(Math.abs(r.fd))}</span> MoM</div>`:""}</td><td class="num">${fmt(r.i)}</td><td class="num">${fmt(r.e)}<div class="cc">${r.eC}</div></td><td class="num">${pct(r.er,1)}</td><td class="num">${fmt(r.posts)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No social numbers uploaded for ${mLabel(p,{month:"long",year:"numeric"})}.</td></tr></tbody>`;
 }
 
-/* ---------- events ---------- */
+/* ---------- events (live from PheedLoop) ---------- */
+const LIVE_PERIOD=(()=>{const d=new Date();return periodOf(d.getFullYear(),d.getMonth()+1)})();
+const liveEvents=()=>{const cut=new Date(Date.now()-45*864e5).toISOString().slice(0,10);return eventsFor(LIVE_PERIOD).filter(e=>(e.end_date||e.start_date)>=cut)};
+const agoText=iso=>{const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?"just now":m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} hr ago`:new Date(iso).toLocaleDateString("en-CA",{month:"short",day:"numeric"})};
 function monthsBefore(eventDate,period){const e=new Date(eventDate+"T12:00:00"),q=new Date(period+"T12:00:00");return (e.getFullYear()-q.getFullYear())*12+(e.getMonth()-q.getMonth())}
 function snap(code,period){return D.snaps.find(s=>s.event_code===code&&s.period===period)||null}
 function finalSnap(code){return D.snaps.filter(s=>s.event_code===code).sort((a,b)=>b.period.localeCompare(a.period))[0]||null}
@@ -494,9 +497,10 @@ function eventsFor(p){
   }).sort((a,b)=>a.start_date.localeCompare(b.start_date));
 }
 function renderEvents(){
-  const p=state.month,evs=eventsFor(p);
-  if(!evs.length){$("evTable").innerHTML=`<tbody><tr><td class="empty-note">No event registrations uploaded for ${mLabel(p,{month:"long",year:"numeric"})}. Add them on the Events tab of the monthly template.</td></tr></tbody>`;$("evNote").textContent="";return}
-  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`;
+  const p=LIVE_PERIOD,evs=liveEvents();
+  $("evLive").textContent=D.sync?`Events, live from PheedLoop · updated ${agoText(D.sync.finished_at||D.sync.started_at)}`:"Events, from PheedLoop · not connected yet";
+  if(!evs.length){$("evTable").innerHTML=`<tbody><tr><td class="empty-note">${D.sync?"No upcoming or recent events in PheedLoop.":"Registrations appear here once the PheedLoop connection is switched on."}</td></tr></tbody>`;$("evNote").textContent="";return}
+  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month so far</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`;
   evs.forEach((e,i)=>{
     const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
     const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
@@ -511,7 +515,7 @@ function renderEvents(){
       <tr class="detail" hidden data-d="${i}"><td colspan="7"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
   });
   $("evTable").innerHTML=h+"</tbody>";
-  $("evNote").textContent="Click an event for its month-by-month registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target.";
+  $("evNote").textContent="Registrations update every hour from PheedLoop and don't change with the month picker. Click an event for its month-end registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target.";
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
     const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
       if(!open){const e=evs[i];const own=D.snaps.filter(s=>s.event_code===e.code).map(s=>({mb:monthsBefore(e.start_date,s.period),v:s.registrations}));
@@ -552,17 +556,18 @@ function setURL(){const u=new URL(location.href);u.searchParams.set("month",stat
 async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
+    try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
     Object.assign(D,{metrics,events,snaps});index();
   }catch(e){$("main").insertAdjacentHTML("afterbegin",'<p class="card empty-note">The dashboard data didn\'t load. Refresh the page in a minute.</p>');return}
   try{const r=await fetch("../eblast-calendar/data.json?t="+Date.now(),{cache:"no-store"});if(r.ok)D.eblast=summarizeEblast(await r.json())}catch(e){}
-  const periods=[...new Set([...D.metrics.map(m=>m.period),...D.snaps.map(s=>s.period)])].sort();
+  const periods=[...new Set(D.metrics.map(m=>m.period))].sort();
   const q=new URL(location.href).searchParams;
   const now=new Date(),lastFull=shiftMonth(periodOf(now.getFullYear(),now.getMonth()+1),-1);
   if(!periods.includes(lastFull))periods.push(lastFull);periods.sort();
   const wanted=q.get("month")?q.get("month")+"-01":null;
   state.month=wanted&&periods.includes(wanted)?wanted:periods[periods.length-1];
   const latestWithData=[...new Set(D.metrics.map(m=>m.period))].sort().pop();
-  if(!wanted&&latestWithData&&!D.metrics.some(m=>m.period===state.month)&&!D.snaps.some(s=>s.period===state.month))state.month=latestWithData;
+  if(!wanted&&latestWithData&&!D.metrics.some(m=>m.period===state.month))state.month=latestWithData;
   $("monthSel").innerHTML=periods.slice().reverse().map(p=>`<option value="${p}">${mLabel(p,{month:"long",year:"numeric"})}</option>`).join("");
   $("monthSel").value=state.month;
   $("monthSel").onchange=e=>{state.month=e.target.value;setURL();render()};

@@ -169,10 +169,9 @@ function parseWorkbook(wb){
       const [code,name,start,end,cap,tReg,tRev,prior,regs,rev,att]=r;
       if(r.every(x=>x==null||x===""))return;
       const row=i+5;
-      if(!code||!name){out.problems.push(`Events row ${row}: needs an event code and name.`);return}
-      const e={code:String(code).trim(),name:String(name).trim(),start_date:toDate(start),end_date:toDate(end),capacity:num(cap),target_registrations:num(tReg),target_revenue:num(tRev),prior_code:prior?String(prior).trim():null,registrations:num(regs),revenue:num(rev),attendance:num(att)};
-      if(!e.start_date){out.problems.push(`Events row ${row} (${e.code}): start date is missing or not YYYY-MM-DD.`);return}
-      if(e.registrations==null){out.problems.push(`Events row ${row} (${e.code}): registrations to date is blank.`);return}
+      if(!code){out.problems.push(`Events row ${row}: needs the PheedLoop event code.`);return}
+      const e={code:String(code).trim(),name:name?String(name).trim():null,start_date:toDate(start),end_date:toDate(end),capacity:num(cap),target_registrations:num(tReg),target_revenue:num(tRev),prior_code:prior?String(prior).trim():null,registrations:num(regs),revenue:num(rev),attendance:num(att)};
+      if(start&&!e.start_date){out.problems.push(`Events row ${row} (${e.code}): start date isn't YYYY-MM-DD.`);return}
       for(const k of ["capacity","target_registrations","target_revenue","registrations","revenue","attendance"])if(Number.isNaN(e[k])){out.problems.push(`Events row ${row} (${e.code}): ${k.replace(/_/g," ")} isn't a number.`);return}
       out.events.push(e);
     });
@@ -200,7 +199,7 @@ function renderPreview(){
   if(!parsed)return;
   const by=t=>parsed.metrics.filter(m=>m._tab===t).length;
   $("stats").innerHTML=[["Marketing",by("Marketing")],["Communications",by("Communications")],["Events",parsed.events.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k} ${k==="Events"?"rows":"numbers"}</span></div>`).join("");
-  const rows=[...parsed.metrics.map(m=>[m._tab,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",`${e.name} (${e.code}) · registrations`,fmt(e.registrations)])];
+  const rows=[...parsed.metrics.map(m=>[m._tab,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",`${e.name||e.code} · ${[e.target_registrations!=null?"target "+fmt(e.target_registrations):"",e.revenue!=null?"revenue $"+fmt(e.revenue):"",e.registrations!=null?fmt(e.registrations)+" registrations":""].filter(Boolean).join(", ")||"details"}`,""])];
   $("previewTable").innerHTML=`<thead><tr><th>Tab</th><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join("")}</tbody>`;
   $("preview").hidden=!rows.length;
   const month=$("month").value,ok=!!month&&!parsed.problems.length&&rows.length>0;
