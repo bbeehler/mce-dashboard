@@ -16,6 +16,8 @@ function loadKeys() {
 }
 const MIN_GAP_MS = 5 * 60 * 1000;          // ignore calls within 5 minutes of the last sync
 const LOOKBACK_DAYS = 45;                   // keep updating events that ended recently (attendance)
+// Older events (back to Jan 1 last year) are copied once, with their final counts filed under the month
+// they ended, so the dashboard can show events held year to date and compare with last year.
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
@@ -55,14 +57,19 @@ Deno.serve(async (req) => {
   const log: Record<string, unknown> = { source: "pheedloop", started_at: started.toISOString() };
   try {
     const events = await allPages("/events/");
-    let written = 0, counted = 0;
+    const backfillFrom = `${started.getUTCFullYear() - 1}-01-01`;
+    const { data: known } = await db.from("events").select("code");
+    const have = new Set((known ?? []).map((r: any) => r.code));
+    let written = 0, counted = 0, backfilled = 0;
     const kept: string[] = [];
     for (const e of events) {
       const code = String(e.code ?? e.event_code ?? "").trim();
       const start = day(e.date ?? e.start_date ?? e.starts_at);
       const end = day(e.end_date ?? e.ends_at) ?? start;
-      if (!code || !start || (end ?? start) < cutoff) continue;
+      if (!code || !start) continue;
       if (/\btest(ing)?\b/i.test(String(e.event_name ?? e.name ?? ""))) continue; // skip PheedLoop test events
+      const old = (end ?? start) < cutoff;
+      if (old && ((end ?? start) < backfillFrom || have.has(code))) continue;
 
       let regs = num(e.total_registration_count);
       if (regs == null) { regs = (await allPages(`/events/${code}/attendees/`)).length; counted++; }
@@ -77,13 +84,14 @@ Deno.serve(async (req) => {
       const { error: e1 } = await db.from("events").upsert(ev, { onConflict: "code" });
       if (e1) throw new Error(`events ${code}: ${e1.message}`);
 
-      const snap: Record<string, unknown> = { event_code: code, period, registrations: regs };
+      const endDay = end ?? start;
+      const snap: Record<string, unknown> = { event_code: code, period: old ? `${endDay.slice(0, 7)}-01` : period, registrations: regs };
       if (attendance != null && attendance > 0) snap.attendance = attendance;
       const { error: e2 } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
       if (e2) throw new Error(`snapshot ${code}: ${e2.message}`);
-      written++; kept.push(code);
+      written++; kept.push(code); if (old) backfilled++;
     }
-    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: counted ? `${counted} counted from attendee lists` : null });
+    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: [counted ? `${counted} counted from attendee lists` : "", backfilled ? `${backfilled} past events added` : ""].filter(Boolean).join("; ") || null });
     await db.from("sync_log").insert(log);
     return json({ ok: true, period, events_seen: events.length, events_written: written, codes: kept });
   } catch (err) {
