@@ -487,7 +487,7 @@ function eventsFor(p){
     const past=(e.end_date||e.start_date)<p;
     const mb=monthsBefore(e.start_date,p);
     let ly=null,lyFinal=null;
-    if(e.prior_code){const pe=D.events.find(x=>x.code===e.prior_code);if(pe){const pp=shiftMonth(periodOf(+pe.start_date.slice(0,4),+pe.start_date.slice(5,7)),-mb);const ps=snap(pe.code,pp);ly=ps?ps.registrations:null;lyFinal=finalSnap(pe.code)?.registrations??null}}
+    if(e.prior_code){const pc=D.alias[e.prior_code]||e.prior_code;const pe=D.events.find(x=>x.code===pc);if(pe){const pp=shiftMonth(periodOf(+pe.start_date.slice(0,4),+pe.start_date.slice(5,7)),-mb);const ps=snap(pe.code,pp);ly=ps?ps.registrations:null;lyFinal=finalSnap(pe.code)?.registrations??null}}
     const regs=s?.registrations??null,tgt=e.target_registrations;
     let st={kind:"none",label:"No benchmark"},expected=null;
     if(past){st=tgt?(regs>=tgt?{kind:"good",label:"Hit target"}:{kind:"serious",label:`${pct(regs/tgt,0)} of target`}):{kind:"none",label:"Finished"}}
@@ -506,7 +506,7 @@ function renderEvents(){
     const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
     const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
     const lyd=e.ly?(e.regs-e.ly)/e.ly:null;
-    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}</div></td>
+    h+=`<tr class="ev" tabindex="0" aria-expanded="false" data-i="${i}"><td><div class="evname">${esc(e.name)}</div><div class="evmeta">${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}${D.short[e.code]?" · "+esc(D.short[e.code]):""}</div></td>
       <td class="num">${e.status==="past"?"Done":e.mb<=0?"This month":e.mb}</td>
       <td><div class="prog"><div class="row"><b>${fmt(e.regs)}</b><span style="color:var(--muted)">${e.target_registrations?`of ${fmt(e.target_registrations)} target`:e.capacity?`of ${fmt(e.capacity)} capacity`:""}</span></div>${share?`<div class="bar"><b style="width:${share*100}%"></b>${exp!=null?`<i style="left:calc(${exp*100}% - 1px)"></i>`:""}</div>`:""}</div></td>
       <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
@@ -520,7 +520,7 @@ function renderEvents(){
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
     const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
       if(!open){const e=evs[i];const own=D.snaps.filter(s=>s.event_code===e.code).map(s=>({mb:monthsBefore(e.start_date,s.period),v:s.registrations}));
-        let prior=[];if(e.prior_code){const pe=D.events.find(x=>x.code===e.prior_code);if(pe)prior=D.snaps.filter(s=>s.event_code===pe.code).map(s=>({mb:monthsBefore(pe.start_date,s.period),v:s.registrations}))}
+        let prior=[];if(e.prior_code){const pc=D.alias[e.prior_code]||e.prior_code;const pe=D.events.find(x=>x.code===pc);if(pe)prior=D.snaps.filter(s=>s.event_code===pe.code).map(s=>({mb:monthsBefore(pe.start_date,s.period),v:s.registrations}))}
         const all=[...own,...prior].map(x=>x.mb);const max=Math.max(...all,1),min=Math.min(...all,0);
         const xs=[];for(let m=max;m>=min;m--)xs.push(m);
         const pick=(arr,m)=>{const f=arr.find(x=>x.mb===m);return f?f.v:null};
@@ -558,7 +558,8 @@ async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
-    Object.assign(D,{metrics,events:events.filter(e=>!e.merged_into),snaps});index();
+    Object.assign(D,{metrics,events:events.filter(e=>!e.merged_into),snaps});
+    D.alias={};D.short={};events.filter(e=>e.merged_into).forEach(e=>{D.alias[e.code]=e.merged_into;D.short[e.merged_into]=D.short[e.merged_into]||e.code});index();
   }catch(e){$("main").insertAdjacentHTML("afterbegin",'<p class="card empty-note">The dashboard data didn\'t load. Refresh the page in a minute.</p>');return}
   try{const r=await fetch("../eblast-calendar/data.json?t="+Date.now(),{cache:"no-store"});if(r.ok)D.eblast=summarizeEblast(await r.json())}catch(e){}
   const periods=[...new Set(D.metrics.map(m=>m.period))].sort();
