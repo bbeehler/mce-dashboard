@@ -3,6 +3,7 @@
 //   POST {action:"check", passcode}                      -> {ok:true} if the passcode is right
 //   POST {action:"history", passcode}                    -> last 12 uploads
 //   POST {action:"save", passcode, period, metrics, events, targets, filename}
+//   POST {action:"targets", passcode, year, targets}        -> set or clear yearly targets
 //
 // The passcode lives only in the MCE_UPLOAD_PASSCODE secret. Writes use the service role,
 // so the public site never holds a key that can change data.
@@ -60,6 +61,24 @@ Deno.serve(async (req) => {
   if (body.action === "history") {
     const { data, error } = await db.from("uploads").select("period,uploaded_at,filename,rows_written").order("uploaded_at", { ascending: false }).limit(12);
     return error ? json({ error: error.message }, 500, h) : json({ uploads: data }, 200, h);
+  }
+
+  // Targets entered on the upload page: {year, targets:[{stream,source,metric,dimension,better,target|null}]}; null clears a target.
+  if (body.action === "targets") {
+    const { year, targets } = body;
+    if (!Number.isInteger(year) || year < 2020 || year > 2100 || !Array.isArray(targets) || targets.length > 100) return json({ error: "The targets are in the wrong format." }, 400, h);
+    const bad = targets.some((t: any) => !STREAMS.has(t?.stream) || !str(t?.source, 40) || !str(t?.metric, 80) || typeof (t?.dimension ?? "") !== "string" || !["higher", "lower"].includes(t?.better) || !(t.target === null || (typeof t.target === "number" && Number.isFinite(t.target) && t.target >= 0)));
+    if (bad) return json({ error: "One of the targets isn't valid." }, 400, h);
+    const set = targets.filter((t: any) => t.target !== null).map((t: any) => ({ year, stream: t.stream, source: t.source, brand: "All", metric: t.metric, dimension: t.dimension ?? "", target: t.target, better: t.better }));
+    if (set.length) {
+      const { error } = await db.from("targets").upsert(set, { onConflict: "year,stream,source,brand,metric,dimension" });
+      if (error) return json({ error: `Saving the targets failed: ${error.message}` }, 500, h);
+    }
+    for (const t of targets.filter((t: any) => t.target === null)) {
+      const { error } = await db.from("targets").delete().match({ year, stream: t.stream, source: t.source, brand: "All", metric: t.metric, dimension: t.dimension ?? "" });
+      if (error) return json({ error: `Clearing a target failed: ${error.message}` }, 500, h);
+    }
+    return json({ ok: true, saved: targets.length }, 200, h);
   }
 
   if (body.action !== "save") return json({ error: "Unknown action." }, 400, h);

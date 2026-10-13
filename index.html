@@ -245,7 +245,7 @@ footer p{margin:0}
 
   <footer>
     <p>Each month's numbers are uploaded from the monthly template on the <a href="upload.html">Upload month</a> page and stored in Supabase. MoM compares with the previous month and YoY with the same month last year. In the Year to date view, numbers add up January through the selected month (follower counts are the latest month), and YoY compares the same months of last year; it shows “–” until last year has all of those months uploaded. Rates are calculated from the counts.</p>
-    <p>“Broad” means a send to 1,000 or more people on the main AIA Canada list. Targets are set on the Targets tab of the monthly template.</p>
+    <p>“Broad” means a send to 1,000 or more people on the main AIA Canada list. Targets are set on the <a href="upload.html#targetsCard">Upload month</a> page.</p>
   </footer>
 </main>
 <div id="tip" hidden></div>
@@ -587,7 +587,7 @@ function targetActual(t,p){
 function renderTargets(){
   const p=state.month,y=+p.slice(0,4),list=TARGETS.map(t=>({...t,tg:D.targets.find(x=>x.year===y&&x.stream===t.stream&&x.source===t.source&&x.metric===t.metric&&(x.dimension||"")===(t.dimension||""))})).filter(t=>t.tg);
   $("tgTitle").textContent=`${y} targets`;$("tgSub").textContent=`· year to date, through ${mLabel(p,{month:"long"})}`;
-  if(!list.length){$("tgTable").innerHTML="";$("tgNote").innerHTML=`No targets set for ${y} yet. Add them on the <b>Targets</b> tab of the monthly template and upload it; the dashboard will then show whether each measure is on pace.`;return}
+  if(!list.length){$("tgTable").innerHTML="";$("tgNote").innerHTML=`No targets set for ${y} yet. Set them under <a href="upload.html#targetsCard">Yearly targets on the Upload month page</a>; the dashboard will then show whether each measure is on pace.`;return}
   const show=(t,v)=>v==null?"–":t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
   const groups={marketing:"Marketing",communications:"Communications",engagement:"Engagement"};let cur="",h=`<thead><tr><th>Measure</th><th class="num">${y} target</th><th class="num">So far</th><th class="num">Expected by now</th><th style="width:22%">Progress</th><th>Status</th></tr></thead><tbody>`;
   for(const t of list){

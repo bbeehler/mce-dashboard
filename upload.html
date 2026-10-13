@@ -48,6 +48,18 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{position:sticky;top:0;background:var(--wash);text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:6px 8px}
 td{padding:6px 8px;border-top:1px solid var(--grid)}
 td.n{text-align:right}
+.seg{display:inline-flex;border:1px solid var(--grid);border-radius:6px;overflow:hidden}
+.seg button{background:var(--surface);color:var(--ink);border:0;border-radius:0;padding:6px 12px;font-weight:500}
+.seg button+button{border-left:1px solid var(--grid)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.tgt{max-height:none}
+.tgt td{vertical-align:middle}.tgt .grp td{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--wash)}
+.tgt .how{font-size:11.5px;color:var(--muted)}
+.tin{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--grid);border-radius:6px;padding:0 8px;background:var(--surface)}
+.tin input{font:inherit;border:0;background:transparent;color:var(--ink);width:96px;padding:7px 0;text-align:right;outline:none}
+.tin:focus-within{outline:2px solid var(--accent);outline-offset:1px}.tin span{color:var(--muted)}
+.tin.changed{border-color:var(--accent)}
+@media (max-width:560px){.tin input{width:64px}.tgt th,.tgt td{padding:6px}.seg button[aria-pressed="true"]{background:var(--accent)}}
 ol{margin:0;padding-left:20px;display:grid;gap:4px}
 @media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month]{min-width:0;width:100%}}
 </style>
@@ -98,6 +110,15 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     </div>
     <div class="row"><button id="save" disabled type="button">Save</button><span class="muted" id="saveHint">Upload a workbook to continue.</span></div>
     <div id="saveMsg"></div>
+  </section>
+
+  <section class="card" id="targetsCard" hidden>
+    <h2>4. Yearly targets</h2>
+    <p>Set the goals the dashboard measures progress against. Leave a box empty for no target. “So far” is this year's actual, to help you pick a realistic number.</p>
+    <div class="row" role="group" aria-label="Target year"><span class="muted">Year</span><span class="seg" id="tgYears"></span></div>
+    <div class="tbl tgt"><table id="tgForm"></table></div>
+    <div class="row"><button id="tgSave" type="button">Save targets</button><span class="muted" id="tgHint"></span></div>
+    <div id="tgMsg"></div>
   </section>
 
   <section class="card">
@@ -152,7 +173,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;if(on)loadHistory();else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;if(on){loadHistory();loadTargets()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -265,6 +286,69 @@ $("save").onclick=async()=>{
     msg("saveMsg","err",`Not saved: ${esc(err.message)} Saving the same month again is safe.`);
   }
   $("save").disabled=false;
+};
+
+/* ---------- targets ---------- */
+// unit: n (count), pct (percent), dec (one decimal), money. kind decides the "so far" figure.
+const TG=[
+ ["Marketing","marketing","ga4","engaged_sessions","","higher","n","Engaged website sessions","Total for the year","total"],
+ ["Marketing","marketing","ga4","key_events","","higher","n","Website key events (conversions)","Total for the year","total"],
+ ["Marketing","marketing","ga4","engagement_rate","","higher","pct","Website engagement rate","Engaged sessions ÷ sessions","rate:engaged_sessions/sessions"],
+ ["Communications","communications","insightly","open_rate","","higher","pct","Email unique open rate","Unique opens ÷ delivered","rate:unique_opens/delivered"],
+ ["Communications","communications","insightly","click_rate","","higher","pct","Email unique click rate","Unique clicks ÷ delivered","rate:unique_clicks/delivered"],
+ ["Communications","communications","insightly","opt_outs_per_broad_send","","lower","dec","Opt-outs per broad send","Lower is better","rate:opt_outs_main_list/broad_sends_main_list"],
+ ["Communications","communications","insightly","broad_sends_avg","","lower","dec","Broad sends to a member per month","Monthly average; lower is better (audit cap ~9)","avg:broad_sends_main_list"],
+ ["Communications","communications","social","followers","LinkedIn","higher","n","LinkedIn followers","At year end","level"],
+ ["Communications","communications","social","engagements_all","","higher","n","Social engagements, all platforms","Total for the year","sumdims:engagements"],
+ ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","Events held during the year","event"],
+ ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance (checked in)","Events held during the year","event"],
+ ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","Events held during the year","event"],
+].map(([group,stream,source,metric,dimension,better,unit,label,how,kind])=>({group,stream,source,metric,dimension,better,unit,label,how,kind}));
+let tgYear=new Date().getFullYear(),tgSaved=[];
+const tgKey=t=>`${t.stream}|${t.source}|${t.metric}|${t.dimension}`;
+const tgShow=(t,v)=>v==null?"–":t.unit==="pct"?(v*100).toFixed(1)+"%":t.unit==="dec"?v.toFixed(1):t.unit==="money"?"$"+fmt(Math.round(v)):fmt(Math.round(v));
+const tgIn=(t,v)=>v==null?"":t.unit==="pct"?+(v*100).toFixed(2)+"":t.unit==="dec"?+v.toFixed(2)+"":String(Math.round(v));
+function soFar(t,rows,y){
+  const yr=rows.filter(r=>r.period.startsWith(y+"-")&&r.source===t.source),get=(m,d="")=>{const o={};for(const r of yr)if(r.metric===m&&r.dimension===d)o[r.period]=Number(r.value);return o};
+  const [k,arg]=t.kind.split(":");
+  if(k==="total"){const o=get(t.metric),ms=Object.keys(o);return ms.length?{v:Object.values(o).reduce((a,b)=>a+b,0),n:ms.length}:null}
+  if(k==="rate"){const [a,b]=arg.split("/"),A=get(a),B=get(b),ms=Object.keys(A).filter(m=>m in B);const den=ms.reduce((s,m)=>s+B[m],0);return den?{v:ms.reduce((s,m)=>s+A[m],0)/den,n:ms.length}:null}
+  if(k==="avg"){const o=get(arg),ms=Object.keys(o);return ms.length?{v:Object.values(o).reduce((a,b)=>a+b,0)/ms.length,n:ms.length}:null}
+  if(k==="level"){const o=get(t.metric,t.dimension),ms=Object.keys(o).sort();return ms.length?{v:o[ms[ms.length-1]],n:ms.length,latest:ms[ms.length-1]}:null}
+  if(k==="sumdims"){const o=yr.filter(r=>r.metric===arg),ms=new Set(o.map(r=>r.period));return o.length?{v:o.reduce((a,r)=>a+Number(r.value),0),n:ms.size}:null}
+  return null;
+}
+async function loadTargets(){
+  const y0=new Date().getFullYear();
+  $("tgYears").innerHTML=[y0,y0+1].map(y=>`<button type="button" data-y="${y}" aria-pressed="${y===tgYear}">${y}</button>`).join("");
+  $("tgYears").querySelectorAll("button").forEach(b=>b.onclick=()=>{tgYear=+b.dataset.y;loadTargets()});
+  try{const r=await fetch(`${SUPABASE_URL}/rest/v1/targets?select=year,stream,source,metric,dimension,target&year=eq.${tgYear}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});tgSaved=r.ok?await r.json():[]}catch(e){tgSaved=[]}
+  let rows=[];try{rows=await loadExisting()}catch(e){}
+  let grp="",h=`<thead><tr><th>Measure</th><th style="text-align:right">${tgYear} so far</th><th style="text-align:right">${tgYear} target</th></tr></thead><tbody>`;
+  TG.forEach((t,i)=>{
+    const cur=tgSaved.find(x=>tgKey({...x,dimension:x.dimension||""})===tgKey(t)),sf=soFar(t,rows,tgYear);
+    if(t.group!==grp){grp=t.group;h+=`<tr class="grp"><td colspan="3">${grp}</td></tr>`}
+    const pre=t.unit==="money"?"$":t.better==="lower"?"≤":"",suf=t.unit==="pct"?"%":"";
+    h+=`<tr><td>${esc(t.label)}<div class="how">${esc(t.how)}</div></td><td class="n">${t.kind==="event"?'<span class="muted">see dashboard</span>':sf?`${tgShow(t,sf.v)}<div class="how">${sf.n} month${sf.n===1?"":"s"}</div>`:"–"}</td>
+      <td class="n"><label class="tin">${pre?`<span>${pre}</span>`:""}<input data-i="${i}" inputmode="decimal" aria-label="${esc(t.label)} target for ${tgYear}" value="${esc(tgIn(t,cur?Number(cur.target):null))}" data-orig="${esc(tgIn(t,cur?Number(cur.target):null))}">${suf?`<span>${suf}</span>`:""}</label></td></tr>`;
+  });
+  $("tgForm").innerHTML=h+"</tbody>";
+  $("tgForm").querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{inp.parentElement.classList.toggle("changed",inp.value.trim()!==inp.dataset.orig);tgDirty()}));
+  tgDirty();msg("tgMsg","","");
+}
+function tgDirty(){const n=[...$("tgForm").querySelectorAll("input")].filter(i=>i.value.trim()!==i.dataset.orig).length;$("tgSave").disabled=!n;$("tgSave").textContent=`Save ${tgYear} targets`;$("tgHint").textContent=n?`${n} change${n===1?"":"s"} not saved yet.`:tgSaved.length?`${tgSaved.length} target${tgSaved.length===1?"":"s"} set for ${tgYear}.`:`No targets set for ${tgYear} yet.`}
+$("tgSave").onclick=async()=>{
+  const out=[],bad=[];
+  $("tgForm").querySelectorAll("input").forEach(inp=>{
+    if(inp.value.trim()===inp.dataset.orig)return;const t=TG[+inp.dataset.i],raw=inp.value.trim();
+    if(raw===""){out.push({stream:t.stream,source:t.source,metric:t.metric,dimension:t.dimension,better:t.better,target:null});return}
+    const n=Number(raw.replace(/[$,%\s]/g,""));if(!Number.isFinite(n)||n<0){bad.push(t.label);return}
+    out.push({stream:t.stream,source:t.source,metric:t.metric,dimension:t.dimension,better:t.better,target:t.unit==="pct"?n/100:n});
+  });
+  if(bad.length){msg("tgMsg","err",`Not saved. These aren't numbers: ${bad.map(esc).join(", ")}.`);return}
+  $("tgSave").disabled=true;msg("tgMsg","warn","Saving…");
+  try{const r=await call("targets",{year:tgYear,targets:out});await loadTargets();msg("tgMsg","ok",`Saved ${r.saved} change${r.saved===1?"":"s"} to the ${tgYear} targets. <a href="./">Open the dashboard</a> to see progress.`)}
+  catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("tgMsg","err",`Not saved: ${esc(err.message)}`);$("tgSave").disabled=false}
 };
 
 async function loadHistory(){
