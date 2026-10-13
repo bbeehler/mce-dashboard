@@ -2,7 +2,7 @@
 //
 //   POST {action:"check", passcode}                      -> {ok:true} if the passcode is right
 //   POST {action:"history", passcode}                    -> last 12 uploads
-//   POST {action:"save", passcode, period, metrics, events, filename}
+//   POST {action:"save", passcode, period, metrics, events, targets, filename}
 //
 // The passcode lives only in the MCE_UPLOAD_PASSCODE secret. Writes use the service role,
 // so the public site never holds a key that can change data.
@@ -65,10 +65,11 @@ Deno.serve(async (req) => {
   if (body.action !== "save") return json({ error: "Unknown action." }, 400, h);
 
   // ---- validate ----
-  const { period, metrics = [], events = [], filename = null } = body;
+  const { period, metrics = [], events = [], targets = [], filename = null } = body;
   const problems: string[] = [];
   if (!isPeriod(period)) problems.push("The reporting month is missing or not valid.");
-  if (!Array.isArray(metrics) || !Array.isArray(events)) problems.push("The upload is in the wrong format.");
+  if (!Array.isArray(metrics) || !Array.isArray(events) || !Array.isArray(targets)) problems.push("The upload is in the wrong format.");
+  if (Array.isArray(targets) && targets.length > 100) problems.push("The upload has too many targets.");
   if (metrics.length > 2000 || events.length > 200) problems.push("The upload has too many rows.");
   metrics.forEach((m: any, i: number) => {
     if (!STREAMS.has(m?.stream) || !SOURCES.has(m?.source) || !str(m?.metric, 80) || typeof m?.value !== "number" || !Number.isFinite(m.value) || m.value < 0) problems.push(`Number ${i + 1} isn't valid.`);
@@ -77,6 +78,9 @@ Deno.serve(async (req) => {
     if (!str(e?.code, 40) || (e?.name != null && !str(e?.name)) || !isDate(e?.start_date) || !isDate(e?.end_date)) problems.push(`Event row ${i + 1} needs a valid event code and dates.`);
     for (const k of ["capacity", "target_registrations", "target_revenue", "registrations", "revenue", "attendance"]) if (!isNum(e?.[k])) problems.push(`Event row ${i + 1}: ${k.replace(/_/g, " ")} isn't a number.`);
   });
+  if (Array.isArray(targets)) targets.forEach((t: any, i: number) => {
+    if (!Number.isInteger(t?.year) || t.year < 2020 || t.year > 2100 || !STREAMS.has(t?.stream) || !str(t?.source, 40) || !str(t?.metric, 80) || typeof t?.target !== "number" || !Number.isFinite(t.target) || t.target < 0 || !["higher", "lower"].includes(t?.better)) problems.push(`Target ${i + 1} isn't valid.`);
+  });
   if (problems.length) return json({ error: problems.slice(0, 10).join(" ") }, 400, h);
 
   // ---- save ----
@@ -84,6 +88,11 @@ Deno.serve(async (req) => {
     const rows = metrics.map((m: any) => ({ period, stream: m.stream, source: m.source, brand: "All", metric: m.metric, dimension: typeof m.dimension === "string" ? m.dimension : "", value: m.value, updated_by: "upload page" }));
     const { error } = await db.from("metric_values").upsert(rows, { onConflict: "period,source,brand,metric,dimension" });
     if (error) return json({ error: `Saving the numbers failed: ${error.message}` }, 500, h);
+  }
+  if (targets.length) {
+    const rows = targets.map((t: any) => ({ year: t.year, stream: t.stream, source: t.source, brand: "All", metric: t.metric, dimension: typeof t.dimension === "string" ? t.dimension : "", target: t.target, better: t.better }));
+    const { error } = await db.from("targets").upsert(rows, { onConflict: "year,stream,source,brand,metric,dimension" });
+    if (error) return json({ error: `Saving the targets failed: ${error.message}` }, 500, h);
   }
   for (const e of events) {
     // A hand-typed code (e.g. CN2026) may be linked to its PheedLoop event; save to that event instead.
@@ -115,6 +124,6 @@ Deno.serve(async (req) => {
       if (error) return json({ error: `Saving ${code} for this month failed: ${error.message}` }, 500, h);
     }
   }
-  await db.from("uploads").insert({ period, uploaded_by: "upload page", filename: typeof filename === "string" ? filename.slice(0, 200) : null, rows_written: metrics.length + events.length });
-  return json({ ok: true, saved: metrics.length + events.length }, 200, h);
+  await db.from("uploads").insert({ period, uploaded_by: "upload page", filename: typeof filename === "string" ? filename.slice(0, 200) : null, rows_written: metrics.length + events.length + targets.length });
+  return json({ ok: true, saved: metrics.length + events.length + targets.length }, 200, h);
 });

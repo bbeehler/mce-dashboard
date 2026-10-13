@@ -91,6 +91,7 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
       <span class="muted">Read from the workbook; change it here if needed.</span>
     </div>
     <div id="parseMsg"></div>
+    <div id="checkMsg"></div>
     <div id="preview" hidden>
       <div class="stats" id="stats"></div>
       <div class="tbl"><table id="previewTable"></table></div>
@@ -113,7 +114,35 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const fmt=n=>n==null||n===""?"–":Number(n).toLocaleString("en-CA");
 const msg=(id,kind,text)=>{$(id).innerHTML=text?`<div class="msg ${kind}">${text}</div>`:""};
 const monthLabel=p=>new Date(p+"T12:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"});
-let parsed=null, passcode=null;
+let parsed=null, passcode=null, existing=null;
+const SUPABASE_URL="https://cyeirmvdstdhcbuyghvv.supabase.co",SUPABASE_KEY="sb_publishable_PK9ID4XPE7qWUTsqpGtgrw_5-njCD0e";
+// Numbers already saved, read with the public key, so the upload can be checked against other months.
+async function loadExisting(){
+  if(existing)return existing;const out=[];let from=0;
+  for(;;){const r=await fetch(`${SUPABASE_URL}/rest/v1/metric_values?select=period,source,metric,dimension,value&brand=eq.All`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,Range:`${from}-${from+999}`,"Range-Unit":"items"}});
+    if(!r.ok)throw new Error("read failed");const rows=await r.json();out.push(...rows);if(rows.length<1000)break;from+=1000}
+  return existing=out;
+}
+const SRC={ga4:"GA4 website",insightly:"Insightly email",social:"Social"};
+// Warnings, not blockers: a source identical to another month, or a number far outside its usual range.
+async function checkUpload(){
+  $("checkMsg").innerHTML="";const month=$("month").value;if(!parsed||!month||!parsed.metrics.length)return;
+  let rows;try{rows=await loadExisting()}catch(e){return}
+  const period=month+"-01",warn=[];
+  const others={};for(const r of rows){if(r.period===period||/_ytd$/.test(r.metric))continue;(others[r.source]??={});(others[r.source][r.period]??={})[`${r.metric}|${r.dimension}`]=Number(r.value)}
+  for(const src of [...new Set(parsed.metrics.map(m=>m.source))]){
+    const mine=parsed.metrics.filter(m=>m.source===src);if(mine.length<3)continue;
+    for(const [per,vals] of Object.entries(others[src]||{})){
+      if(mine.every(m=>vals[`${m.metric}|${m.dimension}`]===m.value)){warn.push(`<b>${SRC[src]||src}</b>: all ${mine.length} numbers are identical to ${monthLabel(per)}. Did the wrong month's report get copied?`);break}
+    }
+  }
+  for(const m of parsed.metrics){
+    const hist=Object.entries(others[m.source]||{}).map(([,v])=>v[`${m.metric}|${m.dimension}`]).filter(v=>v!=null).sort((a,b)=>a-b);
+    if(hist.length<3)continue;const med=hist[Math.floor(hist.length/2)];if(med<50)continue;
+    if(m.value>med*3||m.value<med/3)warn.push(`<b>${esc(m._label)}</b>: ${fmt(m.value)} is ${m.value>med?"far above":"far below"} the usual ${fmt(med)} (median of ${hist.length} other months).`);
+  }
+  if(warn.length)$("checkMsg").innerHTML=`<div class="msg warn"><b>Check these before saving.</b> They may be right (a big event, a boosted post), but they're unusual:<ol>${warn.slice(0,12).map(w=>`<li>${w}</li>`).join("")}</ol>${warn.length>12?`<p>…and ${warn.length-12} more.</p>`:""}You can still save.</div>`;
+}
 
 /* ---------- passcode ---------- */
 async function call(action,extra={}){
@@ -162,6 +191,19 @@ function parseWorkbook(wb){
       out.metrics.push({stream,source,brand:brand||"All",metric,dimension:dimension||"",value:v,_label:`${label}${breakdown?" · "+breakdown:""}`,_tab:name});
     });
   }
+  out.targets=[];
+  const tg=wb.Sheets["Targets"];
+  if(tg){
+    const rows=XLSX.utils.sheet_to_json(tg,{header:1,raw:true,defval:null});
+    const years=[3,4].map(j=>{const m=String(rows[3]?.[j]??"").match(/(20\d\d)/);return m?+m[1]:null});
+    rows.slice(4).forEach((r,i)=>{
+      const [,label,,a,b,stream,source,metric,dimension,better,unit]=r;if(!metric)return;
+      [a,b].forEach((v,k)=>{const y=years[k];const n=num(v);if(n==null||!y)return;
+        if(Number.isNaN(n)||n<0){out.problems.push(`Targets row ${i+5} (${label}): “${v}” isn't a number.`);return}
+        out.targets.push({year:y,stream,source,metric,dimension:dimension||"",better:better||"higher",target:unit==="pct"&&n>1?n/100:n,_label:`${label} · ${y}`,_unit:unit});
+      });
+    });
+  }
   const ev=wb.Sheets["Events"];
   if(ev){
     const rows=XLSX.utils.sheet_to_json(ev,{header:1,raw:true,defval:null});
@@ -187,19 +229,19 @@ $("file").addEventListener("change",async()=>{
     parsed=parseWorkbook(wb);parsed.filename=f.name;
   }catch(e){msg("parseMsg","err","That file couldn't be read as an Excel workbook. Use the template from step 1.");return}
   if(parsed.month)$("month").value=parsed.month;
-  const n=parsed.metrics.length+parsed.events.length;
+  const n=parsed.metrics.length+parsed.events.length+parsed.targets.length;
   if(parsed.problems.length)msg("parseMsg","err",`<b>Fix these before saving:</b><ol>${parsed.problems.map(p=>`<li>${esc(p)}</li>`).join("")}</ol>`);
   else if(!n)msg("parseMsg","warn","The workbook has no numbers filled in yet.");
   else msg("parseMsg","","");
-  renderPreview();
+  renderPreview();checkUpload();
 });
-$("month").addEventListener("input",renderPreview);
+$("month").addEventListener("input",()=>{renderPreview();checkUpload()});
 
 function renderPreview(){
   if(!parsed)return;
   const by=t=>parsed.metrics.filter(m=>m._tab===t).length;
-  $("stats").innerHTML=[["Marketing",by("Marketing")],["Communications",by("Communications")],["Events",parsed.events.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k} ${k==="Events"?"rows":"numbers"}</span></div>`).join("");
-  const rows=[...parsed.metrics.map(m=>[m._tab,m._label,fmt(m.value)]),...parsed.events.map(e=>["Events",`${e.name||e.code} · ${[e.target_registrations!=null?"target "+fmt(e.target_registrations):"",e.revenue!=null?"revenue $"+fmt(e.revenue):"",e.registrations!=null?fmt(e.registrations)+" registrations":""].filter(Boolean).join(", ")||"details"}`,""])];
+  $("stats").innerHTML=[["Marketing",by("Marketing")],["Communications",by("Communications")],["Events",parsed.events.length],["Targets",parsed.targets.length]].map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k} ${k==="Events"?"rows":k==="Targets"?"set":"numbers"}</span></div>`).join("");
+  const rows=[...parsed.metrics.map(m=>[m._tab,m._label,fmt(m.value)]),...parsed.targets.map(t=>["Targets",t._label,t._unit==="pct"?(t.target*100).toFixed(1)+"%":t._unit==="money"?"$"+fmt(t.target):t._unit==="dec"?t.target.toFixed(1):fmt(t.target)]),...parsed.events.map(e=>["Events",`${e.name||e.code} · ${[e.target_registrations!=null?"target "+fmt(e.target_registrations):"",e.revenue!=null?"revenue $"+fmt(e.revenue):"",e.registrations!=null?fmt(e.registrations)+" registrations":""].filter(Boolean).join(", ")||"details"}`,""])];
   $("previewTable").innerHTML=`<thead><tr><th>Tab</th><th>Metric</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="n">${esc(r[2])}</td></tr>`).join("")}</tbody>`;
   $("preview").hidden=!rows.length;
   const month=$("month").value,ok=!!month&&!parsed.problems.length&&rows.length>0;
@@ -214,7 +256,8 @@ $("save").onclick=async()=>{
   $("save").disabled=true;msg("saveMsg","warn","Saving…");
   try{
     const metrics=parsed.metrics.map(({_label,_tab,brand,...m})=>m);
-    const r=await call("save",{period,metrics,events:parsed.events,filename:parsed.filename});
+    const targets=parsed.targets.map(({_label,_unit,...t})=>t);
+    const r=await call("save",{period,metrics,events:parsed.events,targets,filename:parsed.filename});existing=null;
     msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them.`);
     loadHistory();
   }catch(err){
