@@ -60,7 +60,7 @@ async function buildBrief() {
   const [metrics, targets, events, snaps] = await Promise.all([
     all("metric_values", "period,source,metric,dimension,value", (q) => q.eq("brand", "All").gte("period", since).not("metric", "like", "%_ytd")),
     all("targets", "year,stream,source,metric,dimension,target,better"),
-    all("events", "code,name,start_date,end_date,capacity,target_registrations,target_revenue,prior_code,merged_into"),
+    all("events", "code,name,start_date,end_date,capacity,target_registrations,target_revenue,prior_code,merged_into,attendance_manual"),
     all("event_snapshots", "event_code,period,registrations,revenue,attendance"),
   ]);
 
@@ -101,7 +101,7 @@ async function buildBrief() {
     const ss = snaps.filter((s) => s.event_code === e.code).sort((a, b) => a.period.localeCompare(b.period));
     const rev = [...ss].reverse().find((s) => s.revenue != null && Number(s.revenue) > 0);
     const att = [...ss].reverse().find((s) => s.attendance != null);
-    lines.push(`${e.name} | ${alias[e.code] ?? ""} | ${e.start_date}${e.end_date && e.end_date !== e.start_date ? "–" + e.end_date : ""} | ${e.capacity ?? ""} | ${e.target_registrations ?? ""} | ${e.target_revenue ?? ""} | ${e.prior_code ?? ""} | ${ss.map((s) => `${s.period.slice(0, 7)}:${s.registrations}`).join(", ")} | ${rev ? Math.round(Number(rev.revenue)) : ""} | ${att ? att.attendance : ""}`);
+    lines.push(`${e.name} | ${alias[e.code] ?? ""} | ${e.start_date}${e.end_date && e.end_date !== e.start_date ? "–" + e.end_date : ""} | ${e.capacity ?? ""} | ${e.target_registrations ?? ""} | ${e.target_revenue ?? ""} | ${e.prior_code ?? ""} | ${ss.map((s) => `${s.period.slice(0, 7)}:${s.registrations}`).join(", ")} | ${rev ? Math.round(Number(rev.revenue)) : ""} | ${e.attendance_manual ?? (att ? att.attendance : "")}`);
   }
 
   if (targets.length) {

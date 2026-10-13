@@ -4,6 +4,7 @@
 //   POST {action:"history", passcode}                    -> last 12 uploads
 //   POST {action:"save", passcode, period, metrics, events, targets, filename}
 //   POST {action:"targets", passcode, year, targets}        -> set or clear yearly targets
+//   POST {action:"attendance", passcode, items:[{code, attendance}]} -> set or clear event attendance
 //
 // The passcode lives only in the MCE_UPLOAD_PASSCODE secret. Writes use the service role,
 // so the public site never holds a key that can change data.
@@ -79,6 +80,20 @@ Deno.serve(async (req) => {
       if (error) return json({ error: `Clearing a target failed: ${error.message}` }, 500, h);
     }
     return json({ ok: true, saved: targets.length }, 200, h);
+  }
+
+  // Attendance entered on the upload page: {items:[{code, attendance|null}]}; null clears the entered number.
+  if (body.action === "attendance") {
+    const items = body.items;
+    if (!Array.isArray(items) || !items.length || items.length > 200) return json({ error: "The attendance list is in the wrong format." }, 400, h);
+    if (items.some((i: any) => !str(i?.code, 40) || !(i.attendance === null || (Number.isInteger(i.attendance) && i.attendance >= 0 && i.attendance < 1000000)))) return json({ error: "Attendance must be a whole number." }, 400, h);
+    for (const i of items) {
+      const { data: row } = await db.from("events").select("code,merged_into").eq("code", i.code.trim()).maybeSingle();
+      if (!row) return json({ error: `Event ${i.code} wasn't found.` }, 400, h);
+      const { error } = await db.from("events").update({ attendance_manual: i.attendance }).eq("code", row.merged_into ?? row.code);
+      if (error) return json({ error: `Saving attendance for ${i.code} failed: ${error.message}` }, 500, h);
+    }
+    return json({ ok: true, saved: items.length }, 200, h);
   }
 
   if (body.action !== "save") return json({ error: "Unknown action." }, 400, h);

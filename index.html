@@ -797,7 +797,8 @@ function eventTotals(e){
   const regs=ss.reduce((a,x)=>Math.max(a,x.registrations||0),0);
   const atts=ss.filter(x=>x.attendance!=null&&x.attendance>0).map(x=>x.attendance);
   const rv_=ss.filter(x=>x.revenue!=null&&Number(x.revenue)>0).sort((a,b)=>b.period.localeCompare(a.period))[0];
-  return{...e,regs,att:atts.length?Math.max(...atts):null,rev:rv_?Number(rv_.revenue):null};
+  // Attendance entered on the upload page wins over PheedLoop check-ins and uploaded numbers.
+  return{...e,regs,att:e.attendance_manual!=null?e.attendance_manual:atts.length?Math.max(...atts):null,rev:rv_?Number(rv_.revenue):null};
 }
 const isTest=e=>/\btest(ing)?\b/i.test(e.name||"");
 const todayStr=()=>new Date().toISOString().slice(0,10);
@@ -851,7 +852,7 @@ function renderYearEvents(){
     evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
     `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td></td></tr></tbody>`;
   const noRev=evs.filter(e=>e.held&&!e.rev),noAtt=evs.filter(e=>e.held&&!e.att);
-  $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so missing attendance can be added on the Events tab of the monthly template.${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
+  $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so attendance can be entered on the <a href="upload.html#attendanceCard">Upload month page</a>.${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
 }
 
 /* ---------- eBlast send plan (live) ---------- */

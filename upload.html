@@ -59,7 +59,7 @@ td.n{text-align:right}
 .tin input{font:inherit;border:0;background:transparent;color:var(--ink);width:96px;padding:7px 0;text-align:right;outline:none}
 .tin:focus-within{outline:2px solid var(--accent);outline-offset:1px}.tin span{color:var(--muted)}
 .tin.changed{border-color:var(--accent)}
-@media (max-width:560px){.tin input{width:64px}.tgt th,.tgt td{padding:6px}.seg button[aria-pressed="true"]{background:var(--accent)}}
+@media (max-width:560px){#atForm th:nth-child(2),#atForm td:nth-child(2){display:none}.tin input{width:64px}.tgt th,.tgt td{padding:6px}.seg button[aria-pressed="true"]{background:var(--accent)}}
 ol{margin:0;padding-left:20px;display:grid;gap:4px}
 @media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month]{min-width:0;width:100%}}
 </style>
@@ -121,6 +121,15 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div id="tgMsg"></div>
   </section>
 
+  <section class="card" id="attendanceCard" hidden>
+    <h2>5. Event attendance</h2>
+    <p>Enter how many people actually attended each event. PheedLoop only counts people checked in at the door, so for events without check-in (like CAIC) type the number here. Leave a box empty to use PheedLoop's check-ins.</p>
+    <div class="row" role="group" aria-label="Event year"><span class="muted">Year</span><span class="seg" id="atYears"></span></div>
+    <div class="tbl tgt"><table id="atForm"></table></div>
+    <div class="row"><button id="atSave" type="button">Save attendance</button><span class="muted" id="atHint"></span></div>
+    <div id="atMsg"></div>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -173,7 +182,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;if(on){loadHistory();loadTargets()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -349,6 +358,40 @@ $("tgSave").onclick=async()=>{
   $("tgSave").disabled=true;msg("tgMsg","warn","Saving…");
   try{const r=await call("targets",{year:tgYear,targets:out});await loadTargets();msg("tgMsg","ok",`Saved ${r.saved} change${r.saved===1?"":"s"} to the ${tgYear} targets. <a href="./">Open the dashboard</a> to see progress.`)}
   catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("tgMsg","err",`Not saved: ${esc(err.message)}`);$("tgSave").disabled=false}
+};
+
+/* ---------- event attendance ---------- */
+let atYear=new Date().getFullYear(),atEvents=[];
+async function sbGet(q){const r=await fetch(`${SUPABASE_URL}/rest/v1/${q}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});if(!r.ok)throw new Error("read failed");return r.json()}
+async function loadAttendance(){
+  const y0=new Date().getFullYear();
+  $("atYears").innerHTML=[y0-1,y0].map(y=>`<button type="button" data-y="${y}" aria-pressed="${y===atYear}">${y}</button>`).join("");
+  $("atYears").querySelectorAll("button").forEach(b=>b.onclick=()=>{atYear=+b.dataset.y;loadAttendance()});
+  let evs=[],snaps=[];
+  try{[evs,snaps]=await Promise.all([sbGet(`events?select=code,name,start_date,merged_into,attendance_manual&start_date=gte.${atYear}-01-01&start_date=lte.${atYear}-12-31&order=start_date`),sbGet(`event_snapshots?select=event_code,registrations,attendance&period=gte.${atYear-1}-01-01`)])}
+  catch(e){$("atForm").innerHTML='<tbody><tr><td class="muted">Events couldn\'t be loaded. Try again in a minute.</td></tr></tbody>';return}
+  const short={};evs.filter(e=>e.merged_into).forEach(e=>{short[e.merged_into]=short[e.merged_into]||e.code});
+  const today=new Date().toISOString().slice(0,10);
+  atEvents=evs.filter(e=>!e.merged_into&&!/\btest(ing)?\b/i.test(e.name||"")).map(e=>{const ss=snaps.filter(x=>x.event_code===e.code);
+    return{...e,short:short[e.code]||"",regs:ss.reduce((a,x)=>Math.max(a,x.registrations||0),0),checkins:ss.reduce((a,x)=>Math.max(a,x.attendance||0),0),held:e.start_date<=today}});
+  if(!atEvents.length){$("atForm").innerHTML=`<tbody><tr><td class="muted">No events found for ${atYear}.</td></tr></tbody>`;atDirty();return}
+  $("atForm").innerHTML=`<thead><tr><th>Event</th><th style="text-align:right">Registered</th><th style="text-align:right">Checked in</th><th style="text-align:right">Attendance</th></tr></thead><tbody>`+
+    atEvents.map((e,i)=>{const v=e.attendance_manual==null?"":String(e.attendance_manual);
+      return `<tr><td>${esc(e.name)}<div class="how">${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}${e.short?" · "+esc(e.short):""}${e.held?"":" · upcoming"}</div></td><td class="n">${fmt(e.regs)}</td><td class="n">${e.checkins?fmt(e.checkins):'<span class="muted">none</span>'}</td>
+        <td class="n">${e.held?`<label class="tin"><input data-i="${i}" inputmode="numeric" aria-label="Attendance for ${esc(e.name)}" placeholder="${e.checkins||""}" value="${esc(v)}" data-orig="${esc(v)}"></label>`:'<span class="muted">after the event</span>'}</td></tr>`}).join("")+"</tbody>";
+  $("atForm").querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{inp.parentElement.classList.toggle("changed",inp.value.trim()!==inp.dataset.orig);atDirty()}));
+  atDirty();msg("atMsg","","");
+}
+function atDirty(){const ins=[...$("atForm").querySelectorAll("input")],n=ins.filter(i=>i.value.trim()!==i.dataset.orig).length,set=atEvents.filter(e=>e.attendance_manual!=null).length;
+  $("atSave").disabled=!n;$("atHint").textContent=n?`${n} change${n===1?"":"s"} not saved yet.`:set?`Attendance entered for ${set} event${set===1?"":"s"} in ${atYear}.`:`No attendance entered for ${atYear} yet.`}
+$("atSave").onclick=async()=>{
+  const items=[],bad=[];
+  $("atForm").querySelectorAll("input").forEach(inp=>{if(inp.value.trim()===inp.dataset.orig)return;const e=atEvents[+inp.dataset.i],raw=inp.value.trim().replace(/[,\s]/g,"");
+    if(raw===""){items.push({code:e.code,attendance:null});return}const n=Number(raw);if(!Number.isInteger(n)||n<0){bad.push(e.name);return}items.push({code:e.code,attendance:n})});
+  if(bad.length){msg("atMsg","err",`Not saved. Use whole numbers for: ${bad.map(esc).join(", ")}.`);return}
+  $("atSave").disabled=true;msg("atMsg","warn","Saving…");
+  try{const r=await call("attendance",{items});await loadAttendance();msg("atMsg","ok",`Saved attendance for ${r.saved} event${r.saved===1?"":"s"}. <a href="./">Open the dashboard</a> to see it in the targets.`)}
+  catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("atMsg","err",`Not saved: ${esc(err.message)}`);$("atSave").disabled=false}
 };
 
 async function loadHistory(){
