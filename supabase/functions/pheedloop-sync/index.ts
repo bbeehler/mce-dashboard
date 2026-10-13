@@ -48,6 +48,19 @@ Deno.serve(async (req) => {
   const missing = loadKeys();
   if (missing.length) return json({ error: `Missing Supabase secrets: ${missing.join(", ")}` }, 500);
 
+  // Inspect one event: event-level counts only (numbers, true/false and field names), no attendee details.
+  let body: any = {};
+  try { body = await req.json(); } catch { /* cron calls send {} */ }
+  if (typeof body?.inspect === "string" && /^EVE[A-Z]{6,20}$/.test(body.inspect)) {
+    const code = body.inspect;
+    const all = await allPages("/events/");
+    const ev = all.find((e: any) => String(e.code ?? e.event_code) === code);
+    const out: Record<string, unknown> = { found: !!ev, fields: ev ? Object.keys(ev) : [], numbers: Object.fromEntries(Object.entries(ev ?? {}).filter(([, v]) => typeof v === "number" || typeof v === "boolean")), name: ev?.event_name ?? ev?.name, date: ev?.date ?? ev?.start_date, end: ev?.end_date };
+    try { const a = await pl(`/events/${code}/attendance/`); out.attendance = Object.fromEntries(Object.entries(a ?? {}).map(([k, v]) => [k, Array.isArray(v) ? `${v.length} records` : typeof v === "object" ? "object" : v])); } catch (e) { out.attendance = String((e as Error).message).slice(0, 200); }
+    try { const at = await allPages(`/events/${code}/attendees/`); out.attendee_records = at.length; out.attendee_fields = at[0] ? Object.keys(at[0]) : []; const st: Record<string, number> = {}; for (const x of at) { const k = String(x.status ?? x.registration_status ?? x.ticket_name ?? x.ticket ?? "n/a").slice(0, 40); st[k] = (st[k] ?? 0) + 1; } out.attendee_breakdown = st; } catch (e) { out.attendee_records = String((e as Error).message).slice(0, 200); }
+    return json(out);
+  }
+
   const { data: last } = await db.from("sync_log").select("started_at,ok").eq("source", "pheedloop").order("started_at", { ascending: false }).limit(1).maybeSingle();
   if (last?.ok && Date.now() - new Date(last.started_at).getTime() < MIN_GAP_MS) return json({ skipped: true, reason: "synced less than 5 minutes ago", last: last.started_at });
 

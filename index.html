@@ -294,6 +294,7 @@ footer p{margin:0}
   <section class="stream" aria-labelledby="enH">
     <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
     <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
+    <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
   </section>
 
   <footer>
@@ -840,6 +841,19 @@ function renderEvents(){
   });
 }
 
+// Every event in the selected year (held and upcoming) with the numbers the targets count.
+function renderYearEvents(){
+  const y=+state.month.slice(0,4),evs=yearEvents(y).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+  $("yrEvH").innerHTML=`Every event in ${y} <span class="sub">· the numbers the event targets count</span>`;
+  if(!evs.length){$("yrEvTable").innerHTML=`<tbody><tr><td class="empty-note">No events found for ${y}.</td></tr></tbody>`;$("yrEvNote").textContent="";return}
+  const tot=k=>evs.reduce((a,e)=>a+(e[k]||0),0),cell=(v,f)=>v==null||v===0&&f!=="r"?'<span style="color:var(--muted)">–</span>':f==="m"?money(v):fmt(v);
+  $("yrEvTable").innerHTML=`<thead><tr><th>Event</th><th>Date</th><th>Code</th><th class="num">Registrations</th><th class="num">Attendance</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`+
+    evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
+    `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td></td></tr></tbody>`;
+  const noRev=evs.filter(e=>e.held&&!e.rev),noAtt=evs.filter(e=>e.held&&!e.att);
+  $("yrEvNote").innerHTML=`Registrations are the highest count reported (PheedLoop or uploaded). PheedLoop doesn't provide revenue, and only has attendance when people are checked in, so those come from the Events tab of the monthly template.${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
+}
+
 /* ---------- eBlast send plan (live) ---------- */
 function summarizeEblast(data){
   if(!data||!data.sends)return null;
@@ -862,7 +876,7 @@ function renderDiscipline(){
 
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderDiscipline()}
+function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline()}
 function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view==="ytd")u.searchParams.set("view","ytd");else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
