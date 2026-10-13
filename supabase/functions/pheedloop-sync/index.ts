@@ -2,7 +2,7 @@
 // Runs hourly from pg_cron (and on demand). For each event it upserts `events` (name, dates, capacity;
 // targets and last year's code set in the monthly template are left alone) and writes this month's
 // row in `event_snapshots`. Last month's row is never touched again, so it keeps the month-end count.
-// No attendee details are stored: only totals.
+// Revenue comes from the registrations (orders) endpoint. No attendee details are stored: only totals.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Read on every run so newly added or changed secrets take effect without a redeploy.
@@ -40,6 +40,20 @@ async function allPages(path: string) {
   }
   return out;
 }
+// Money totals from the registrations (orders) endpoint. Cancelled registrations are left out.
+async function moneyFor(code: string) {
+  const regs = await allPages(`/events/${code}/registrations/`);
+  const n = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(+v) ? +v : 0);
+  const live = regs.filter((r: any) => !r.canceled);
+  const sum = (k: string, rows = live) => Math.round(rows.reduce((a: number, r: any) => a + n(r[k]), 0) * 100) / 100;
+  const cats: Record<string, number> = {};
+  for (const r of live) { const c = String(r.registration_category?.name ?? r.registration_category ?? "n/a").slice(0, 40); cats[c] = (cats[c] ?? 0) + 1; }
+  const sub = sum("sub_total"), tax = sum("tax_total"), due = sum("amount_due");
+  // Revenue = what registrants have been charged, tax included, less anything still owing. This matches the
+  // revenue figures the team reported by hand (e.g. CCIF Montréal 2026: $112,504.74).
+  const revenue = Math.round((sub + tax - due) * 100) / 100;
+  return { revenue, orders: regs.length, cancelled: regs.length - live.length, complete: live.filter((r: any) => r.registration_complete).length, sub_total: sub, tax_total: tax, payment_total: sum("payment_total"), refund_total: sum("refund_total", regs), amount_due: due, by_category: cats };
+}
 const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
 const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : typeof n === "string" && n.trim() !== "" && Number.isFinite(+n) ? +n : null);
 
@@ -58,7 +72,37 @@ Deno.serve(async (req) => {
     const out: Record<string, unknown> = { found: !!ev, fields: ev ? Object.keys(ev) : [], numbers: Object.fromEntries(Object.entries(ev ?? {}).filter(([, v]) => typeof v === "number" || typeof v === "boolean")), name: ev?.event_name ?? ev?.name, date: ev?.date ?? ev?.start_date, end: ev?.end_date };
     try { const a = await pl(`/events/${code}/attendance/`); out.attendance = Object.fromEntries(Object.entries(a ?? {}).map(([k, v]) => [k, Array.isArray(v) ? `${v.length} records` : typeof v === "object" ? "object" : v])); } catch (e) { out.attendance = String((e as Error).message).slice(0, 200); }
     try { const at = await allPages(`/events/${code}/attendees/`); out.attendee_records = at.length; out.attendee_fields = at[0] ? Object.keys(at[0]) : []; const st: Record<string, number> = {}; for (const x of at) { const k = String(x.status ?? x.registration_status ?? x.ticket_name ?? x.ticket ?? "n/a").slice(0, 40); st[k] = (st[k] ?? 0) + 1; } out.attendee_breakdown = st; } catch (e) { out.attendee_records = String((e as Error).message).slice(0, 200); }
+    if (body.money) { try { out.money = await moneyFor(code); } catch (e) { out.money = String((e as Error).message).slice(0, 200); } }
+    if (body.probe) {
+      // Which other endpoints exist for this event: status and top-level shape only.
+      const paths = ["orders", "transactions", "payments", "tickets", "ticket-types", "sales", "invoices", "registrations", "checkins", "check-ins", "attendance/sessions", "sessions", "exhibitors", "speakers", "sponsors", "revenue", "reports", "analytics", "pulse", "purchases", "registration-orders"];
+      const probe: Record<string, unknown> = {};
+      for (const pth of paths) {
+        try { const b = await pl(`/events/${code}/${pth}/`); const items = listOf(b); probe[pth] = { ok: true, count: Array.isArray(items) ? items.length : null, keys: items?.[0] ? Object.keys(items[0]).slice(0, 40) : (b && typeof b === "object" ? Object.keys(b).slice(0, 40) : []) }; }
+        catch (e) { probe[pth] = String((e as Error).message).slice(0, 60); }
+      }
+      out.probe = probe;
+      try { const at = await allPages(`/events/${code}/attendees/`); const m = at.find((x: any) => x.metadata && typeof x.metadata === "object")?.metadata; out.metadata_keys = m ? Object.keys(m) : []; out.metadata_number_keys = m ? Object.keys(m).filter((k) => typeof m[k] === "number") : []; out.events_attended_type = typeof at[0]?.events_attended; } catch { /* optional */ }
+    }
     return json(out);
+  }
+
+  // One-off: fill in revenue for every 2025+ event already in the dashboard, on its latest snapshot.
+  if (body?.backfillRevenue === true) {
+    const { data: evs } = await db.from("events").select("code,name,start_date").is("merged_into", null).gte("start_date", `${new Date().getUTCFullYear() - 1}-01-01`);
+    const done: Record<string, unknown> = {};
+    for (const e of evs ?? []) {
+      if (/\btest(ing)?\b/i.test(e.name ?? "") || !/^EVE/.test(e.code)) continue;
+      try {
+        const m = await moneyFor(e.code);
+        if (!(m.revenue > 0)) { done[e.code] = "no paid registrations"; continue; }
+        const { data: sn } = await db.from("event_snapshots").select("period").eq("event_code", e.code).order("period", { ascending: false }).limit(1).maybeSingle();
+        if (!sn) { done[e.code] = "no snapshot"; continue; }
+        await db.from("event_snapshots").update({ revenue: m.revenue }).eq("event_code", e.code).eq("period", sn.period);
+        done[e.code] = m.revenue;
+      } catch (err) { done[e.code] = String((err as Error).message).slice(0, 80); }
+    }
+    return json({ ok: true, revenue: done });
   }
 
   const { data: last } = await db.from("sync_log").select("started_at,ok").eq("source", "pheedloop").order("started_at", { ascending: false }).limit(1).maybeSingle();
@@ -91,6 +135,9 @@ Deno.serve(async (req) => {
         try { const a = await pl(`/events/${code}/attendance/`); attendance = Array.isArray(a?.checked_in) ? a.checked_in.length : null; } catch { /* attendance is optional */ }
       }
 
+      let revenue: number | null = null;
+      try { const m = await moneyFor(code); if (m.revenue > 0) revenue = m.revenue; } catch { /* revenue is optional */ }
+
       const ev: Record<string, unknown> = { code, name: String(e.event_name ?? e.name ?? code).trim(), start_date: start, end_date: end };
       const cap = num(e.attendee_registration_capacity);
       if (cap != null && cap > 0) ev.capacity = cap;
@@ -100,6 +147,7 @@ Deno.serve(async (req) => {
       const endDay = end ?? start;
       const snap: Record<string, unknown> = { event_code: code, period: old ? `${endDay.slice(0, 7)}-01` : period, registrations: regs };
       if (attendance != null && attendance > 0) snap.attendance = attendance;
+      if (revenue != null) snap.revenue = revenue;
       const { error: e2 } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
       if (e2) throw new Error(`snapshot ${code}: ${e2.message}`);
       written++; kept.push(code); if (old) backfilled++;
