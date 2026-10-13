@@ -172,6 +172,33 @@ dialog.ask::backdrop{background:rgba(8,12,28,.55)}
 .mseg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
 .soc-top{margin-bottom:18px}
 h4{font-size:13px;margin:0 0 8px;font-weight:600}h4 .sub{font-weight:400;color:var(--muted)}
+#pdfBtn{background:transparent;font-family:inherit;cursor:pointer}
+.print-meta{display:none}
+/* PDF / print: the page is laid out at a fixed width first so charts are drawn to fit the printed page. */
+html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;padding-inline:0}
+@page{size:letter landscape;margin:0.45in}
+@media print{
+  html,body{background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .controls>*:not(.print-meta),dialog.ask,#tip,details.tv,.sources a.link,.ask-new{display:none!important}
+  .print-meta{display:block;text-align:right;font-size:12px;color:var(--brand-2);line-height:1.5}
+  .print-meta b{color:#fff;font-size:14px}
+  .band{border-bottom-width:3px}
+  .card,.kpi,.tile,tr,.kpis{break-inside:avoid}
+  .card:has(#evTable){break-inside:auto}
+  .stream{break-before:page}
+  .sec-head{break-after:avoid}
+  #socMetric{display:none!important}
+  main,footer{margin-bottom:0!important;padding-bottom:0!important}
+  body>*:not(header):not(main){display:none!important}
+  .kpis{grid-template-columns:repeat(4,1fr)!important}
+  .cols{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .fat{grid-template-columns:minmax(0,2fr) minmax(0,1fr)!important}
+  .tiles{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .targets td:nth-child(4),.targets th:nth-child(4),.targets td:nth-child(5),.targets th:nth-child(5){display:table-cell!important}
+  tr.detail{display:none!important}
+  a{color:inherit;text-decoration:none}
+  footer{break-inside:avoid}
+}
 .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;align-items:start}
 .stack{display:grid;gap:12px}
 .chart{width:100%;display:block;overflow:visible}
@@ -249,7 +276,9 @@ footer p{margin:0}
       <label>View <span class="seg" role="group" aria-label="View"><button type="button" id="vMonth" aria-pressed="true">Month</button><button type="button" id="vYtd" aria-pressed="false">Year to date</button></span></label>
             <button type="button" class="upl ask-btn" id="askOpen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Ask the data</button>
             <a class="upl" href="https://bbeehler.github.io/eblast-calendar/">eBlast calendar</a>
+            <button type="button" class="upl" id="pdfBtn" title="Save this view as a PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>Download PDF</button>
             <a class="upl" href="upload.html">Upload month</a>
+      <div class="print-meta" id="printMeta"></div>
     </div>
   </div>
 </header>
@@ -906,6 +935,15 @@ async function boot(){
   let askReady=false;const dlg=$("askDlg");askReadyReset=()=>{askReady=false};
   $("askOpen").onclick=async()=>{dlg.showModal();if(!askReady){askReady=true;await renderAsk()}setTimeout(()=>($("askQ")||$("askCode"))?.focus(),50)};
   $("askClose").onclick=()=>dlg.close();
+  // PDF: switch to the light theme and a fixed page width, redraw, then open the print dialog ("Save as PDF").
+  const origTitle=document.title;let printing=false;
+  const prep=()=>{if(printing)return;printing=true;const h=document.documentElement;h.dataset.prevTheme=h.getAttribute("data-theme")||"";h.setAttribute("data-theme","light");h.classList.add("printing");
+    $("printMeta").innerHTML=`<b>${YTD?"Year to date, "+esc(winLabel(state.month,true)):esc(mLabel(state.month,{month:"long",year:"numeric"}))}</b><br>Prepared ${new Date().toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}`;
+    document.title=`MCE Executive Dashboard - ${YTD?"YTD "+winLabel(state.month,true):mLabel(state.month,{month:"long",year:"numeric"})}`;render()};
+  const restore=()=>{if(!printing)return;printing=false;const h=document.documentElement;h.classList.remove("printing");if(h.dataset.prevTheme)h.setAttribute("data-theme",h.dataset.prevTheme);else h.removeAttribute("data-theme");document.title=origTitle;render()};
+  window.__prepPrint=prep;window.__restorePrint=restore;
+  addEventListener("beforeprint",prep);addEventListener("afterprint",restore);
+  $("pdfBtn").onclick=()=>{prep();setTimeout(()=>window.print(),250)};
   dlg.addEventListener("click",e=>{if(e.target===dlg)dlg.close()});
   let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150)});
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);
