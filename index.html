@@ -119,6 +119,24 @@ tr.detail td{background:var(--wash);padding:16px 18px}
 
 /* Columns */
 .targets{margin-top:18px}
+.ask{margin-top:18px}
+.ask-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ask-new{background:none;border:0;color:var(--s1);font-size:12.5px;padding:0}
+.ask form{display:flex;gap:8px;align-items:flex-end;margin-top:10px}
+.ask textarea,.ask input[type=password]{flex:1;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:8px;padding:9px 11px;resize:vertical;min-height:42px}
+.ask textarea:focus,.ask input:focus{outline:2px solid var(--s1);outline-offset:1px}
+.ask .go{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:600;white-space:nowrap}
+.ask .go[disabled]{opacity:.55;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips button{background:var(--wash);border:1px solid var(--grid);border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--ink-2)}
+.chips button:hover{border-color:var(--s1);color:var(--ink)}
+.thread{display:grid;gap:12px;margin-top:12px}
+.thread .q{justify-self:end;max-width:80%;background:var(--wash);border-radius:12px 12px 2px 12px;padding:8px 12px;font-size:13.5px}
+.thread .a{font-size:14px;line-height:1.55;max-width:760px}
+.thread .a p{margin:0 0 8px}.thread .a ul{margin:0 0 8px;padding-left:20px}.thread .a li{margin-bottom:3px}
+.thread .a.err{color:var(--crit)}
+.thread .wait{color:var(--muted);font-size:13px}
+.ask .fine{font-size:11.5px;color:var(--muted);margin-top:8px}
 .targets td .bar{height:6px;border-radius:3px;background:var(--grid);overflow:hidden;min-width:80px;position:relative}
 .targets td .bar b{display:block;height:100%;background:var(--s1)}
 .targets td .bar i{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-2)}
@@ -228,6 +246,10 @@ footer p{margin:0}
 <main class="wrap" id="main">
   <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
+  <section class="card ask" aria-labelledby="askH" id="askCard">
+    <div class="ask-head"><h3 id="askH">Ask the data <span class="sub">· answers from Claude using this dashboard's numbers</span></h3><button type="button" class="ask-new" id="askNew" hidden>New conversation</button></div>
+    <div id="askBody"><p class="empty-note">Loading…</p></div>
+  </section>
   <section class="card targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
 
   <section class="stream" aria-labelledby="mkH">
@@ -627,6 +649,43 @@ function renderFatigue(months){
     (hi.length&&lo.length&&orate(hi)!=null&&orate(lo)!=null?(Math.abs(orate(hi)-orate(lo))<0.01?`<div class="row"><b>${pct(orate(hi))} vs ${pct(orate(lo))}</b>open rate in months over the ~${MONTH_CAP} broad-send cap (${hi.length}) vs within it (${lo.length}): about the same so far, so the cost of extra sends shows up in opt-outs more than opens.</div>`:`<div class="row"><b>${pct(orate(hi))} vs ${pct(orate(lo))}</b>open rate in months over the ~${MONTH_CAP} broad-send cap (${hi.length}) vs months within it (${lo.length}).</div>`):"");
 }
 
+/* ---------- ask the data (Claude) ---------- */
+const ASK_FN=SUPABASE_URL+"/functions/v1/mce-ask";
+const askStore={get(){try{return localStorage.getItem("mce-ask-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-ask-passcode",v):localStorage.removeItem("mce-ask-passcode")}catch(e){}}};
+let askHist=[],askBusy=false;
+async function askCall(body){const r=await fetch(ASK_FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:"The question service didn't answer properly."}));if(!r.ok||j.error)throw Object.assign(new Error(j.error||`Error ${r.status}`),{status:r.status});return j}
+// Light markdown: paragraphs, bullet lists, **bold**. Everything is escaped first.
+function mdLite(t){const out=[];let list=null;for(const raw of esc(t).split(/\n/)){const l=raw.trim();const b=l.match(/^[-*•]\s+(.*)$/)||l.match(/^\d+[.)]\s+(.*)$/);
+  if(b){(list??=[]).push(b[1]);continue}if(list){out.push("<ul>"+list.map(x=>`<li>${x}</li>`).join("")+"</ul>");list=null}if(l)out.push(`<p>${l}</p>`)}
+  if(list)out.push("<ul>"+list.map(x=>`<li>${x}</li>`).join("")+"</ul>");return out.join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")}
+const ASK_IDEAS=["What should we focus on next month?","Are we sending too many emails?","Which events are at risk of missing target?","Why did website traffic spike in September?"];
+async function renderAsk(){
+  const host=$("askBody");
+  let st;try{st=await askCall({action:"status"})}catch(e){host.innerHTML='<p class="empty-note">The question service isn\'t reachable right now.</p>';return}
+  if(!st.ready){host.innerHTML=`<p class="empty-note">Questions are almost ready. ${!st.key?"The Claude API key":"The question passcode (MCE_ASK_PASSCODE)"} still needs to be added in Supabase.</p>`;return}
+  if(!askStore.get()){
+    host.innerHTML=`<p class="note" style="margin:0">Enter the question passcode once; this browser remembers it.</p><form id="askLock"><input type="password" id="askCode" placeholder="Question passcode" autocomplete="current-password" aria-label="Question passcode" required><button class="go" type="submit">Unlock</button></form><div id="askLockMsg" class="fine"></div>`;
+    $("askLock").onsubmit=async e=>{e.preventDefault();const code=$("askCode").value;try{await askCall({action:"check",passcode:code});askStore.set(code);renderAsk()}catch(err){$("askLockMsg").textContent=err.status===401?"That passcode isn't right.":err.message}};return}
+  host.innerHTML=`<form id="askForm"><textarea id="askQ" rows="1" maxlength="1000" placeholder="Ask a question about website, email, social or events" aria-label="Your question"></textarea><button class="go" id="askGo" type="submit">Ask</button></form>
+    <div class="chips" id="askIdeas">${ASK_IDEAS.map(q=>`<button type="button">${esc(q)}</button>`).join("")}</div>
+    <div class="thread" id="askThread" aria-live="polite"></div>
+    <p class="fine">Claude answers from the numbers on this dashboard (uploaded months, PheedLoop events, targets and the eBlast send plan). Double-check figures before sharing decisions. <a href="#" id="askForget">Forget passcode</a></p>`;
+  $("askIdeas").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("askQ").value=b.textContent;ask()});
+  $("askForm").onsubmit=e=>{e.preventDefault();ask()};
+  $("askQ").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ask()}});
+  $("askForget").onclick=e=>{e.preventDefault();askStore.set(null);askHist=[];renderAsk()};
+  $("askNew").onclick=()=>{askHist=[];$("askThread").innerHTML="";$("askNew").hidden=true;$("askIdeas").hidden=false};
+  askHist.forEach(t=>$("askThread").insertAdjacentHTML("beforeend",`<div class="q">${esc(t.q)}</div><div class="a">${mdLite(t.a)}</div>`));
+}
+async function ask(){
+  const q=$("askQ").value.trim();if(!q||askBusy)return;askBusy=true;$("askGo").disabled=true;$("askIdeas").hidden=true;
+  const th=$("askThread");th.insertAdjacentHTML("beforeend",`<div class="q">${esc(q)}</div><div class="a wait">Looking at the numbers…</div>`);const slot=th.lastElementChild;$("askQ").value="";
+  try{const r=await askCall({action:"ask",passcode:askStore.get(),question:q,month:state.month.slice(0,7),view:state.view,history:askHist});
+    slot.className="a";slot.innerHTML=mdLite(r.answer);askHist.push({q,a:r.answer});askHist=askHist.slice(-4);$("askNew").hidden=false}
+  catch(err){slot.className="a err";slot.textContent=err.message;if(err.status===401){askStore.set(null);setTimeout(renderAsk,1500)}}
+  askBusy=false;$("askGo").disabled=false;$("askQ").focus();
+}
+
 /* ---------- targets ---------- */
 // Measures that can have a yearly target. kind: total (adds up, paced by months uploaded), rate, avg (monthly average),
 // level (latest value, paced from the year's first month), event (events held this year).
@@ -794,7 +853,7 @@ async function boot(){
   if(q.get("view")==="ytd")state.view="ytd";
   $("vMonth").onclick=()=>{state.view="month";setURL();render()};
   $("vYtd").onclick=()=>{state.view="ytd";setURL();render()};
-  render();
+  render();renderAsk();
   let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150)});
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);
 }
