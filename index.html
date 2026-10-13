@@ -119,9 +119,19 @@ tr.detail td{background:var(--wash);padding:16px 18px}
 
 /* Columns */
 .targets{margin-top:18px}
-.ask{margin-top:18px}
-.ask-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ask-btn{background:#fff;color:var(--brand)!important;border-color:#fff!important;display:inline-flex;align-items:center;gap:6px;font-family:inherit;cursor:pointer}
+.ask-btn:hover{background:#e9edf7!important}
+dialog.ask{width:min(760px,calc(100vw - 32px));max-height:min(86vh,900px);border:0;border-radius:14px;padding:18px 20px 16px;background:var(--surface);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.35);display:none;flex-direction:column}
+dialog.ask[open]{display:flex}
+dialog.ask::backdrop{background:rgba(8,12,28,.55)}
+.ask #askBody{overflow:auto;min-height:0;padding-right:2px}
+.ask-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+.ask-head h3{margin:0}
+.ask-tools{display:flex;align-items:center;gap:12px;flex:none}
 .ask-new{background:none;border:0;color:var(--s1);font-size:12.5px;padding:0}
+.ask-x{background:none;border:0;font-size:16px;line-height:1;color:var(--muted);padding:4px 6px;border-radius:6px}
+.ask-x:hover{background:var(--wash);color:var(--ink)}
+@media (max-width:560px){dialog.ask{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;padding:14px 16px}}
 .ask form{display:flex;gap:8px;align-items:flex-end;margin-top:10px}
 .ask textarea,.ask input[type=password]{flex:1;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:8px;padding:9px 11px;resize:vertical;min-height:42px}
 .ask textarea:focus,.ask input:focus{outline:2px solid var(--s1);outline-offset:1px}
@@ -237,6 +247,7 @@ footer p{margin:0}
     <div class="controls">
       <label>Month <select id="monthSel"></select></label>
       <label>View <span class="seg" role="group" aria-label="View"><button type="button" id="vMonth" aria-pressed="true">Month</button><button type="button" id="vYtd" aria-pressed="false">Year to date</button></span></label>
+            <button type="button" class="upl ask-btn" id="askOpen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Ask the data</button>
             <a class="upl" href="https://bbeehler.github.io/eblast-calendar/">eBlast calendar</a>
             <a class="upl" href="upload.html">Upload month</a>
     </div>
@@ -246,10 +257,6 @@ footer p{margin:0}
 <main class="wrap" id="main">
   <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
-  <section class="card ask" aria-labelledby="askH" id="askCard">
-    <div class="ask-head"><h3 id="askH">Ask the data <span class="sub">· answers from Claude using this dashboard's numbers</span></h3><button type="button" class="ask-new" id="askNew" hidden>New conversation</button></div>
-    <div id="askBody"><p class="empty-note">Loading…</p></div>
-  </section>
   <section class="card targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
 
   <section class="stream" aria-labelledby="mkH">
@@ -294,6 +301,11 @@ footer p{margin:0}
     <p>“Broad” means a send to 1,000 or more people on the main AIA Canada list. Targets are set on the <a href="upload.html#targetsCard">Upload month</a> page.</p>
   </footer>
 </main>
+<dialog class="ask" id="askDlg" aria-labelledby="askH">
+  <div class="ask-head"><h3 id="askH">Ask the data <span class="sub">· answers from Claude using this dashboard's numbers</span></h3>
+    <div class="ask-tools"><button type="button" class="ask-new" id="askNew" hidden>New conversation</button><button type="button" class="ask-x" id="askClose" aria-label="Close">✕</button></div></div>
+  <div id="askBody"><p class="empty-note">Loading…</p></div>
+</dialog>
 <div id="tip" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -658,15 +670,16 @@ async function askCall(body){const r=await fetch(ASK_FN,{method:"POST",headers:{
 function mdLite(t){const out=[];let list=null;for(const raw of esc(t).split(/\n/)){const l=raw.trim();const b=l.match(/^[-*•]\s+(.*)$/)||l.match(/^\d+[.)]\s+(.*)$/);
   if(b){(list??=[]).push(b[1]);continue}if(list){out.push("<ul>"+list.map(x=>`<li>${x}</li>`).join("")+"</ul>");list=null}if(l)out.push(`<p>${l}</p>`)}
   if(list)out.push("<ul>"+list.map(x=>`<li>${x}</li>`).join("")+"</ul>");return out.join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")}
+let askReadyReset=()=>{};
 const ASK_IDEAS=["What should we focus on next month?","Are we sending too many emails?","Which events are at risk of missing target?","Why did website traffic spike in September?"];
 async function renderAsk(){
   const host=$("askBody");
-  let st;try{st=await askCall({action:"status"})}catch(e){host.innerHTML='<p class="empty-note">The question service isn\'t reachable right now.</p>';return}
+  let st;try{st=await askCall({action:"status"})}catch(e){host.innerHTML='<p class="empty-note">The question service isn\'t reachable right now. Close this and try again in a minute.</p>';askReadyReset();return}
   if(!st.ready){host.innerHTML=`<p class="empty-note">Questions are almost ready. ${!st.key?"The Claude API key":"The question passcode (MCE_ASK_PASSCODE)"} still needs to be added in Supabase.</p>`;return}
   if(!askStore.get()){
     host.innerHTML=`<p class="note" style="margin:0">Enter the question passcode once; this browser remembers it.</p><form id="askLock"><input type="password" id="askCode" placeholder="Question passcode" autocomplete="current-password" aria-label="Question passcode" required><button class="go" type="submit">Unlock</button></form><div id="askLockMsg" class="fine"></div>`;
     $("askLock").onsubmit=async e=>{e.preventDefault();const code=$("askCode").value;try{await askCall({action:"check",passcode:code});askStore.set(code);renderAsk()}catch(err){$("askLockMsg").textContent=err.status===401?"That passcode isn't right.":err.message}};return}
-  host.innerHTML=`<form id="askForm"><textarea id="askQ" rows="1" maxlength="1000" placeholder="Ask a question about website, email, social or events" aria-label="Your question"></textarea><button class="go" id="askGo" type="submit">Ask</button></form>
+  host.innerHTML=`<form id="askForm"><textarea id="askQ" rows="1" maxlength="1000" placeholder="Ask about website, email, social or events" aria-label="Your question"></textarea><button class="go" id="askGo" type="submit">Ask</button></form>
     <div class="chips" id="askIdeas">${ASK_IDEAS.map(q=>`<button type="button">${esc(q)}</button>`).join("")}</div>
     <div class="thread" id="askThread" aria-live="polite"></div>
     <p class="fine">Claude answers from the numbers on this dashboard (uploaded months, PheedLoop events, targets and the eBlast send plan). Double-check figures before sharing decisions. <a href="#" id="askForget">Forget passcode</a></p>`;
@@ -853,7 +866,11 @@ async function boot(){
   if(q.get("view")==="ytd")state.view="ytd";
   $("vMonth").onclick=()=>{state.view="month";setURL();render()};
   $("vYtd").onclick=()=>{state.view="ytd";setURL();render()};
-  render();renderAsk();
+  render();
+  let askReady=false;const dlg=$("askDlg");askReadyReset=()=>{askReady=false};
+  $("askOpen").onclick=async()=>{dlg.showModal();if(!askReady){askReady=true;await renderAsk()}setTimeout(()=>($("askQ")||$("askCode"))?.focus(),50)};
+  $("askClose").onclick=()=>dlg.close();
+  dlg.addEventListener("click",e=>{if(e.target===dlg)dlg.close()});
   let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(render,150)});
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);
 }
