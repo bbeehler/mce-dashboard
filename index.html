@@ -679,9 +679,9 @@ async function renderAsk(){
 }
 async function ask(){
   const q=$("askQ").value.trim();if(!q||askBusy)return;askBusy=true;$("askGo").disabled=true;$("askIdeas").hidden=true;
-  const th=$("askThread");th.insertAdjacentHTML("beforeend",`<div class="q">${esc(q)}</div><div class="a wait">Looking at the numbers…</div>`);const slot=th.lastElementChild;$("askQ").value="";
+  const th=$("askThread");th.insertAdjacentHTML("beforeend",`<div class="q">${esc(q)}</div><div class="a wait">Looking at the numbers… this can take up to a minute.</div>`);const slot=th.lastElementChild;$("askQ").value="";
   try{const r=await askCall({action:"ask",passcode:askStore.get(),question:q,month:state.month.slice(0,7),view:state.view,history:askHist});
-    slot.className="a";slot.innerHTML=mdLite(r.answer);askHist.push({q,a:r.answer});askHist=askHist.slice(-4);$("askNew").hidden=false}
+    if(!r.answer)throw new Error("No answer came back. Try again.");slot.className="a";slot.innerHTML=mdLite(r.answer);askHist.push({q,a:r.answer});askHist=askHist.slice(-4);$("askNew").hidden=false}
   catch(err){slot.className="a err";slot.textContent=err.message;if(err.status===401){askStore.set(null);setTimeout(renderAsk,1500)}}
   askBusy=false;$("askGo").disabled=false;$("askQ").focus();
 }

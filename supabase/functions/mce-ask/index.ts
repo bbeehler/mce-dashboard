@@ -176,7 +176,8 @@ Deno.serve(async (req) => {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1200, system: SYSTEM, messages }),
+      // Thinking tokens count toward max_tokens, so leave plenty of room for the written answer.
+      body: JSON.stringify({ model: MODEL, max_tokens: 8000, output_config: { effort: "medium" }, system: SYSTEM, messages }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -190,8 +191,10 @@ Deno.serve(async (req) => {
       return json({ error: friendly }, 502, h);
     }
     const answer = (j.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
-    Object.assign(log, { ok: true, input_tokens: j.usage?.input_tokens ?? null, output_tokens: j.usage?.output_tokens ?? null });
+    const inTok = (j.usage?.input_tokens ?? 0) + (j.usage?.cache_read_input_tokens ?? 0) + (j.usage?.cache_creation_input_tokens ?? 0);
+    Object.assign(log, { ok: !!answer, input_tokens: inTok || null, output_tokens: j.usage?.output_tokens ?? null, note: answer ? null : `empty answer (stop: ${j.stop_reason})` });
     await db.from("ask_log").insert(log);
+    if (!answer) return json({ error: "Claude ran out of room before writing an answer. Try asking a narrower question." }, 502, h);
     return json({ answer }, 200, h);
   } catch (err) {
     Object.assign(log, { ok: false, note: String((err as Error).message ?? err).slice(0, 300) });
