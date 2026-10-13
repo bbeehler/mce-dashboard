@@ -712,14 +712,19 @@ const TARGETS=[
   {stream:"communications",source:"insightly",metric:"broad_sends_avg",label:"Broad sends to a member per month",kind:"avg",base:"broad_sends_main_list"},
   {stream:"communications",source:"social",metric:"followers",dimension:"LinkedIn",label:"LinkedIn followers",kind:"level"},
   {stream:"communications",source:"social",metric:"engagements_all",label:"Social engagements, all platforms",kind:"total",sumDims:true,base:"engagements"},
-  {stream:"engagement",source:"pheedloop",metric:"registrations_held",label:"Event registrations (events held)",kind:"event",f:"regs"},
-  {stream:"engagement",source:"pheedloop",metric:"attendance_held",label:"Event attendance (checked in)",kind:"event",f:"att"},
-  {stream:"engagement",source:"pheedloop",metric:"revenue_held",label:"Event revenue",kind:"event",f:"rev",money:true},
+  {stream:"engagement",source:"pheedloop",metric:"registrations_held",label:"Event registrations, all events this year",kind:"event",f:"regs"},
+  {stream:"engagement",source:"pheedloop",metric:"attendance_held",label:"Event attendance, events held",kind:"event",f:"att"},
+  {stream:"engagement",source:"pheedloop",metric:"revenue_held",label:"Event revenue, all events this year",kind:"event",f:"rev",money:true},
 ];
 function targetActual(t,p){
   const k=YTD;YTD=true;try{
     const ms=ytdMonths(p);
-    if(t.kind==="event"){const held=heldEvents(p);const v=held.reduce((a,e)=>a+(e[t.f]||0),0);return{v,n:+p.slice(5,7),held}}
+    if(t.kind==="event"){
+      // Events count for the whole year: events already held plus registrations and revenue
+      // already booked for events still to come. Attendance only exists for held events.
+      const evs=yearEvents(+p.slice(0,4)),held=evs.filter(e=>e.held),up=evs.filter(e=>!e.held);
+      const sum=a=>a.reduce((s,e)=>s+(e[t.f]||0),0),vHeld=sum(held),vUp=t.f==="att"?0:sum(up);
+      return{v:vHeld+vUp,vHeld,vUp,held,up,withData:evs.filter(e=>e[t.f]!=null&&e[t.f]>0).length,n:evs.length}}
     if(t.kind==="rate"){const used=keptMonths(p,t.source,[t.num,t.den],"");return{v:rv(p,t.source,t.num,t.den),n:used.length}}
     if(t.kind==="avg"){const used=keptMonths(p,t.source,[t.base],"");return{v:used.length?val(p,t.source,t.base)/used.length:null,n:used.length}}
     if(t.kind==="level"){const used=ms.filter(m=>mval(m,t.source,t.metric,t.dimension||"")!=null);if(!used.length)return{v:null,n:0};
@@ -740,15 +745,18 @@ function renderTargets(){
     if(a.v!=null){
       if(t.kind==="total"){exp=target*a.n/12;share=a.v/target;mark=exp/target;const r=a.v/exp;st=r>=1?{kind:"good",label:r>=1.1?"Ahead":"On pace"}:r>=0.9?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
       else if(t.kind==="level"){exp=a.start+(target-a.start)*a.n/12;share=Math.min(1,a.v/target);mark=Math.min(1,exp/target);const need=exp-a.start,got=a.v-a.start;const r=need>0?got/need:1;st=r>=1?{kind:"good",label:"On pace"}:r>=0.8?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
-      else if(t.kind==="event"){share=a.v/target;const up=D.events.filter(e=>e.start_date.slice(0,4)===String(y)&&e.start_date>new Date().toISOString().slice(0,10)&&!/\btest(ing)?\b/i.test(e.name));
-        st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} so far`};t.extra=up.length&&a.v<target?`${up.length} more event${up.length===1?"":"s"} this year`:""}
+      else if(t.kind==="event"){share=a.v/target;mark=a.vUp?Math.min(1,a.vHeld/target):null;
+        st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`};
+        const f=v=>t.money?money(v):fmt(v);
+        t.extra=t.f==="att"?`${a.held.length} events held · check-in numbers for ${a.withData} of them`
+          :`${f(a.vHeld)} from ${a.held.length} events held + ${f(a.vUp)} booked for ${a.up.length} still to come${t.f==="rev"?` · revenue uploaded for ${a.withData} of ${a.n} events`:""}`}
       else{const ok=better==="higher"?a.v>=target:a.v<=target,close=better==="higher"?a.v>=target*0.95:a.v<=target*1.05;st=ok?{kind:"good",label:"On target"}:close?{kind:"serious",label:"Close"}:{kind:"crit",label:better==="higher"?"Below target":"Above target"};share=better==="higher"?Math.min(1,a.v/target):Math.min(1,target/a.v)}
     }
     if(t.stream!==cur){cur=t.stream;h+=`<tr class="grp"><td colspan="6">${groups[cur]}</td></tr>`}
     h+=`<tr><td>${esc(t.label)}${t.extra?`<div class="evmeta">${esc(t.extra)}</div>`:""}</td><td class="num">${better==="lower"?"≤ ":""}${show(t,target)}</td><td class="num"><b>${show(t,a.v)}</b>${t.kind==="total"&&a.n&&a.n<+p.slice(5,7)?`<div class="evmeta">${a.n} month${a.n===1?"":"s"} uploaded</div>`:""}</td><td class="num">${exp==null?"–":show(t,exp)}</td><td>${share!=null?`<div class="bar"><b style="width:${Math.min(1,share)*100}%"></b>${mark!=null?`<i style="left:calc(${mark*100}% - 1px)"></i>`:""}</div>`:""}</td><td>${pill(st.kind,st.label)}</td></tr>`;
   }
   $("tgTable").innerHTML=h+"</tbody>";
-  $("tgNote").textContent="Totals are paced evenly across the year by months uploaded (marker on the bar). Rates compare the year-to-date rate with the target. Event measures count events held so far this year.";
+  $("tgNote").textContent="Totals are paced evenly across the year by months uploaded (marker on the bar). Rates compare the year-to-date rate with the target. Event measures count every event this year: those already held, plus registrations and revenue already booked for events still to come (the marker shows the held part).";
 }
 
 /* ---------- events (live from PheedLoop) ---------- */
@@ -781,11 +789,24 @@ function eventsFor(p){
   }).sort((a,b)=>a.start_date.localeCompare(b.start_date));
 }
 // Events that started between Jan 1 and the end of the given month (test events left out), with final counts.
+// An event's totals across every month-end snapshot (PheedLoop and uploaded): the highest registration and
+// attendance count reported, and the latest revenue to date.
+function eventTotals(e){
+  const ss=D.snaps.filter(x=>x.event_code===e.code);
+  const regs=ss.reduce((a,x)=>Math.max(a,x.registrations||0),0);
+  const atts=ss.filter(x=>x.attendance!=null&&x.attendance>0).map(x=>x.attendance);
+  const rv_=ss.filter(x=>x.revenue!=null&&Number(x.revenue)>0).sort((a,b)=>b.period.localeCompare(a.period))[0];
+  return{...e,regs,att:atts.length?Math.max(...atts):null,rev:rv_?Number(rv_.revenue):null};
+}
+const isTest=e=>/\btest(ing)?\b/i.test(e.name||"");
+const todayStr=()=>new Date().toISOString().slice(0,10);
+// Events that started between Jan 1 and the end of the given month and have already happened.
 function heldEvents(p){
   const from=p.slice(0,4)+"-01-01",to=shiftMonth(p,1);
-  return D.events.filter(e=>e.start_date>=from&&e.start_date<to&&e.start_date<=new Date().toISOString().slice(0,10)&&!/\btest(ing)?\b/i.test(e.name))
-    .map(e=>{const s=finalSnap(e.code);const rv_=D.snaps.filter(x=>x.event_code===e.code&&x.revenue!=null&&Number(x.revenue)>0).sort((a,b)=>b.period.localeCompare(a.period))[0];return{...e,regs:s?.registrations||0,rev:rv_?Number(rv_.revenue):0,att:D.snaps.filter(x=>x.event_code===e.code&&x.attendance!=null).sort((a,b)=>b.period.localeCompare(a.period))[0]?.attendance??null}});
+  return D.events.filter(e=>e.start_date>=from&&e.start_date<to&&e.start_date<=todayStr()&&!isTest(e)).map(eventTotals);
 }
+// Every event in a calendar year, held or still to come.
+function yearEvents(y){return D.events.filter(e=>e.start_date.slice(0,4)===String(y)&&!isTest(e)).map(e=>({...eventTotals(e),held:e.start_date<=todayStr()}))}
 function renderEvents(){
   const p=LIVE_PERIOD,evs=liveEvents();
   $("evLive").textContent=D.sync?`Events, live from PheedLoop · updated ${agoText(D.sync.finished_at||D.sync.started_at)}`:"Events, from PheedLoop · not connected yet";

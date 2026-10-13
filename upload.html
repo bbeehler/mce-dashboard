@@ -300,9 +300,9 @@ const TG=[
  ["Communications","communications","insightly","broad_sends_avg","","lower","dec","Broad sends to a member per month","Monthly average; lower is better (audit cap ~9)","avg:broad_sends_main_list"],
  ["Communications","communications","social","followers","LinkedIn","higher","n","LinkedIn followers","At year end","level"],
  ["Communications","communications","social","engagements_all","","higher","n","Social engagements, all platforms","Total for the year","sumdims:engagements"],
- ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","Events held during the year","event"],
- ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance (checked in)","Events held during the year","event"],
- ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","Events held during the year","event"],
+ ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","All events in the year: held, plus registrations for events still to come","event"],
+ ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance","Events held during the year","event"],
+ ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","All events in the year, from revenue uploaded","event"],
 ].map(([group,stream,source,metric,dimension,better,unit,label,how,kind])=>({group,stream,source,metric,dimension,better,unit,label,how,kind}));
 let tgYear=new Date().getFullYear(),tgSaved=[];
 const tgKey=t=>`${t.stream}|${t.source}|${t.metric}|${t.dimension}`;
