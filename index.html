@@ -199,6 +199,15 @@ html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;paddin
   a{color:inherit;text-decoration:none}
   footer{break-inside:avoid}
 }
+.sent{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:24px;align-items:start}
+.sent .big{font-family:var(--display);font-size:40px;font-weight:800;line-height:1}
+.sent .mix{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:12px 0 6px;gap:2px}
+.sent .mix i{display:block;height:100%}
+.sent .mixl{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink-2)}
+.sent .mixl i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.sent .why{margin-top:12px;font-size:13px;color:var(--ink-2);border-left:3px solid var(--grid);padding-left:10px}
+@media (max-width:900px){.sent{grid-template-columns:1fr}}
+@media print{.sent{grid-template-columns:minmax(0,1fr) minmax(0,2fr)!important}}
 .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;align-items:start}
 .stack{display:grid;gap:12px}
 .chart{width:100%;display:block;overflow:visible}
@@ -316,6 +325,9 @@ footer p{margin:0}
       <div class="tiles" id="socGrid"></div>
       <p class="note" id="socNote"></p>
       <details class="tv"><summary>Show as a table</summary><div class="tblwrap"><table class="mini" id="socialTable"></table></div></details>
+    </div>
+    <div class="card" id="sentCard"><h3>Sentiment <span class="sub" id="sentSub"></span></h3>
+      <div class="sent"><div id="sentSummary"></div><div><div id="sentChart"></div><div class="legend"><span><i class="sw" style="--c:var(--s1)"></i>Net positive</span><span><i class="sw" style="--c:var(--s2)"></i>Net negative</span><span class="muted">Net score = positive − negative, as a share of all mentions (−100 to +100)</span></div></div></div>
     </div>
     <div class="card"><h3>Send plan, next 8 weeks <span class="sub">· live from the eBlast calendar</span></h3><div id="discChart"></div><p class="note" id="discNote"></p></div>
   </section>
@@ -542,6 +554,7 @@ function renderKPIs(){
     k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${fmt(MONTH_CAP*ms.length)}`,d:`${ms.length} month${ms.length===1?"":"s"} · ${chips(bs,{better:"lower"})}`,p:b!=null?(over?pill("crit",`${over} month${over===1?"":"s"} over cap`):pill("good","Every month within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")})}
   else k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${MONTH_CAP}`,d:chips(bs,{better:"lower"}),p:b!=null?(b>MONTH_CAP?pill("crit","Over cap"):pill("good","Within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")});
   const eng=x=>{let s=null;for(const pl of PLATFORMS){const v=val(x,"social","engagements",pl);if(v!=null)s=(s||0)+v}return s};
+  {const sv=sentNet(p);if(sv!=null||months13Has()){const lb=sentLabel(sv);k.push({k:"Net sentiment",v:sv!=null?sentFmt(sv):null,small:sv!=null?" / 100":"",d:chips(sentNet,{rate:true}),p:lb?pill(lb.kind,lb.label):null})}}
   k.push({k:"Social engagements",v:eng(p)!=null?fmt(eng(p)):null,d:chips(eng),s:sparkFrom(series(eng),"--s1")});
   if(YTD){const held=heldEvents(p),ly=heldEvents(shiftMonth(p,-12));
     const r=held.reduce((a,e)=>a+e.regs,0),att=held.reduce((a,e)=>a+(e.att||0),0),lr=ly.reduce((a,e)=>a+e.regs,0);
@@ -623,7 +636,7 @@ function renderComms(){
     lineChart($("rateChart"),{labels:months.map(mShort),height:190,yFmt:v=>pct(v,0),tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),endLabels:true,series:[{name:"Open rate",color:"--s1",values:so},{name:"Click rate",color:"--s2",values:sc}]});
     $("rateLegend").innerHTML=`<span><i style="--c:var(--s1)"></i>Unique open rate</span><span><i style="--c:var(--s2)"></i>Unique click rate</span><span class="muted">Peers: opens ${pct(BENCH.open)}, clicks ${pct(BENCH.click)}</span>`;
   } else {emptyNote("rateChart","Open and click rates appear once monthly Insightly numbers (delivered, unique opens, unique clicks) are uploaded. The 2026 audit only has year-to-date rates: 23.3% opens and 4.4% clicks.");$("rateLegend").innerHTML=""}
-  renderFatigue(months);
+  renderFatigue(months);renderSentiment(months);
   $("emailH").textContent=YTD?"Email year to date":"Email this month";$("emailSub").textContent="· "+winLabel(p,true);
   const e=m=>x=>val(x,"insightly",m),er=(m)=>x=>rv(x,"insightly",m,"delivered");
   const hasE=["campaign_sends","delivered","unique_opens"].some(m=>val(p,"insightly",m)!=null);
@@ -641,6 +654,41 @@ function renderComms(){
   const srows=PLATFORMS.map(pl=>{const g=(m,x=p)=>val(x,"social",m,pl);return{pl,f:g("followers"),fc:fChange(pl),i:g("impressions"),e:g("engagements"),er:rv(p,"social","engagements","impressions",pl),posts:g("posts"),lc:g("link_clicks"),eC:chips(x=>g("engagements",x))}}).filter(r=>r.f!=null||r.e!=null||r.i!=null);
   $("socialTable").innerHTML=srows.length?`<thead><tr><th>Platform</th><th class="num">Followers</th><th class="num">Impressions</th><th class="num">Engagements</th><th class="num">Eng. rate</th><th class="num">Posts</th></tr></thead><tbody>`+srows.map(r=>`<tr><td>${esc(r.pl)}</td><td class="num">${fmt(r.f)}${r.fc?`<div class="cc"><span class="chg ${r.fc.d>=0?"up":"down"}">${r.fc.d>=0?"+":"−"}${fmt(Math.abs(r.fc.d))}</span> ${r.fc.l}</div>`:""}</td><td class="num">${fmt(r.i)}</td><td class="num">${fmt(r.e)}<div class="cc">${r.eC}</div></td><td class="num">${pct(r.er,1)}</td><td class="num">${fmt(r.posts)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No social numbers uploaded for ${winLabel(p,true)}.</td></tr></tbody>`;
   renderSocial(months);
+}
+
+/* ---------- sentiment ---------- */
+const months13Has=()=>D.metrics.some(m=>m.source==="sentiment");
+// Net sentiment as a fraction (-1..1): (positive - negative) / all mentions. YTD sums the months.
+function sentNet(x){const p=val(x,"sentiment","sent_positive"),u=val(x,"sentiment","sent_neutral"),n=val(x,"sentiment","sent_negative");if(p==null&&u==null&&n==null)return null;const t=(p||0)+(u||0)+(n||0);return t?((p||0)-(n||0))/t:null}
+const sentLabel=v=>v==null?null:v>=0.3?{kind:"good",label:"Strongly positive"}:v>=0.1?{kind:"good",label:"Positive"}:v>-0.1?{kind:"none",label:"Mixed"}:{kind:"crit",label:"Negative"};
+const sentFmt=v=>v==null?"–":(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v*100));
+// Diverging monthly bars around zero: blue above (net positive), orange below (net negative).
+function netChart(host,months,vals,win){
+  host.innerHTML="";const W=host.clientWidth||520,H=190,m={t:14,r:8,b:24,l:34},iw=W-m.l-m.r,ih=H-m.t-m.b;
+  const svg=el("svg",{class:"chart",viewBox:`0 0 ${W} ${H}`,width:W,height:H,role:"img","aria-label":"Net sentiment by month"},host);
+  const y=v=>m.t+ih/2-(ih/2)*v;[1,0.5,0,-0.5,-1].forEach(v=>{el("line",{x1:m.l,x2:m.l+iw,y1:y(v),y2:y(v),class:v===0?"base":"grid"},svg);const t=el("text",{x:m.l-6,y:y(v)+4,"text-anchor":"end"},svg);t.textContent=sentFmt(v)});
+  const n=months.length,band=iw/n,bw=Math.min(30,band*0.6);
+  months.forEach((mo,i)=>{const v=vals[i],cx=m.l+band*i+band/2;
+    if(i%Math.max(1,Math.ceil(46/band))===0){const t=el("text",{x:cx,y:H-6,"text-anchor":"middle"},svg);t.textContent=mShort(mo)}
+    if(v!=null&&v!==0){const top=Math.min(y(v),y(0)),h=Math.abs(y(v)-y(0));el("rect",{x:cx-bw/2,y:top,width:bw,height:Math.max(1,h),rx:Math.min(3,h/2),fill:css(v>0?"--s1":"--s2"),"fill-opacity":win.has(mo)?1:0.35},svg)}
+    if(v!=null&&win.has(mo)&&months[i]===state.month){const t=el("text",{x:cx,y:v>=0?y(v)-5:y(v)+13,"text-anchor":"middle",class:"lbl"},svg);t.textContent=sentFmt(v)}
+    const hit=el("rect",{x:m.l+band*i,y:m.t,width:band,height:ih,fill:"transparent"},svg);
+    hit.addEventListener("mousemove",ev=>{const p=mval(mo,"sentiment","sent_positive"),u=mval(mo,"sentiment","sent_neutral"),ng=mval(mo,"sentiment","sent_negative");showTip(`<b>${mLabel(mo,{month:"long",year:"numeric"})}</b><div>${v==null?"Not entered":`Net score <b>${sentFmt(v)}</b>`}</div>${v!=null?`<div>${fmt(p)} positive · ${fmt(u)} neutral · ${fmt(ng)} negative</div>`:""}`,ev.clientX,ev.clientY)});
+    hit.addEventListener("mouseleave",hideTip)});
+}
+function renderSentiment(months){
+  const p=state.month,v=sentNet(p),win=new Set(YTD?ytdMonths(p):[p]);
+  $("sentSub").textContent="· "+winLabel(p,true);
+  const vals=monthly(()=>months.map(sentNet));
+  if(!vals.some(x=>x!=null)){$("sentSummary").innerHTML='<p class="empty-note">No sentiment entered yet. Add it each month on the <a href="upload.html#sentimentCard">Upload month page</a>.</p>';$("sentChart").innerHTML="";return}
+  const pos=val(p,"sentiment","sent_positive")||0,neu=val(p,"sentiment","sent_neutral")||0,neg=val(p,"sentiment","sent_negative")||0,t=pos+neu+neg,lb=sentLabel(v);
+  const noteMonths=YTD?ytdMonths(p).slice().reverse():[p],nt=noteMonths.map(m=>({m,n:(D.notes||[]).find(x=>x.topic==="sentiment"&&x.period===m)})).find(x=>x.n);
+  $("sentSummary").innerHTML=v==null?`<p class="empty-note">No sentiment entered for ${esc(winLabel(p,true))}.</p>`:
+    `<div class="big">${sentFmt(v)}</div><div style="margin:6px 0">${pill(lb.kind,lb.label)}</div><div class="cc">${chips(sentNet,{rate:true})}</div>
+     <div class="mix">${[[pos,"--s1"],[neu,"--muted"],[neg,"--s2"]].filter(x=>x[0]>0).map(([a,c])=>`<i style="width:${a/t*100}%;background:var(${c})"></i>`).join("")}</div>
+     <div class="mixl"><span><i style="background:var(--s1)"></i>${pct(pos/t,0)} positive</span><span><i style="background:var(--muted)"></i>${pct(neu/t,0)} neutral</span><span><i style="background:var(--s2)"></i>${pct(neg/t,0)} negative</span></div>
+     ${nt?`<div class="why"><b>What drove it${YTD?` (${mLabel(nt.m,{month:"short"})})`:""}:</b> ${esc(nt.n.note)}</div>`:""}`;
+  netChart($("sentChart"),months,vals,win);
 }
 
 /* ---------- social charts: all platforms together + each platform ---------- */
@@ -742,6 +790,7 @@ const TARGETS=[
   {stream:"communications",source:"insightly",metric:"broad_sends_avg",label:"Broad sends to a member per month",kind:"avg",base:"broad_sends_main_list"},
   {stream:"communications",source:"social",metric:"followers",dimension:"LinkedIn",label:"LinkedIn followers",kind:"level"},
   {stream:"communications",source:"social",metric:"engagements_all",label:"Social engagements, all platforms",kind:"total",sumDims:true,base:"engagements"},
+  {stream:"communications",source:"sentiment",metric:"net_sentiment",label:"Net sentiment score",kind:"net"},
   {stream:"engagement",source:"pheedloop",metric:"registrations_held",label:"Event registrations, all events this year",kind:"event",f:"regs"},
   {stream:"engagement",source:"pheedloop",metric:"attendance_held",label:"Event attendance, events held",kind:"event",f:"att"},
   {stream:"engagement",source:"pheedloop",metric:"revenue_held",label:"Event revenue, all events this year",kind:"event",f:"rev",money:true},
@@ -755,6 +804,7 @@ function targetActual(t,p){
       const evs=yearEvents(+p.slice(0,4)),held=evs.filter(e=>e.held),up=evs.filter(e=>!e.held);
       const sum=a=>a.reduce((s,e)=>s+(e[t.f]||0),0),vHeld=sum(held),vUp=t.f==="att"?0:sum(up);
       return{v:vHeld+vUp,vHeld,vUp,held,up,withData:evs.filter(e=>e[t.f]!=null&&e[t.f]>0).length,n:evs.length}}
+    if(t.kind==="net"){const used=keptMonths(p,"sentiment",["sent_positive"],"");const v=sentNet(p);return{v:v==null?null:v*100,n:used.length}}
     if(t.kind==="rate"){const used=keptMonths(p,t.source,[t.num,t.den],"");return{v:rv(p,t.source,t.num,t.den),n:used.length}}
     if(t.kind==="avg"){const used=keptMonths(p,t.source,[t.base],"");return{v:used.length?val(p,t.source,t.base)/used.length:null,n:used.length}}
     if(t.kind==="level"){const used=ms.filter(m=>mval(m,t.source,t.metric,t.dimension||"")!=null);if(!used.length)return{v:null,n:0};
@@ -767,7 +817,7 @@ function renderTargets(){
   const p=state.month,y=+p.slice(0,4),list=TARGETS.map(t=>({...t,tg:D.targets.find(x=>x.year===y&&x.stream===t.stream&&x.source===t.source&&x.metric===t.metric&&(x.dimension||"")===(t.dimension||""))})).filter(t=>t.tg);
   $("tgTitle").textContent=`${y} targets`;$("tgSub").textContent=`· year to date, through ${mLabel(p,{month:"long"})}`;
   if(!list.length){$("tgTable").innerHTML="";$("tgNote").innerHTML=`No targets set for ${y} yet. Set them under <a href="upload.html#targetsCard">Yearly targets on the Upload month page</a>; the dashboard will then show whether each measure is on pace.`;return}
-  const show=(t,v)=>v==null?"–":t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
+  const show=(t,v)=>v==null?"–":t.kind==="net"?(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v)):t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
   const groups={marketing:"Marketing",communications:"Communications",engagement:"Engagement"};let cur="",h=`<thead><tr><th>Measure</th><th class="num">${y} target</th><th class="num">So far</th><th class="num">Expected by now</th><th style="width:22%">Progress</th><th>Status</th></tr></thead><tbody>`;
   for(const t of list){
     const target=Number(t.tg.target),better=t.tg.better||(t.dec||t.metric==="broad_sends_avg"?"lower":"higher"),a=targetActual(t,p);
@@ -780,7 +830,7 @@ function renderTargets(){
         const f=v=>t.money?money(v):fmt(v);
         t.extra=t.f==="att"?`${a.held.length} events held · check-in numbers for ${a.withData} of them`
           :`${f(a.vHeld)} from ${a.held.length} events held + ${f(a.vUp)} booked for ${a.up.length} still to come${t.f==="rev"?` · revenue uploaded for ${a.withData} of ${a.n} events`:""}`}
-      else{const ok=better==="higher"?a.v>=target:a.v<=target,close=better==="higher"?a.v>=target*0.95:a.v<=target*1.05;st=ok?{kind:"good",label:"On target"}:close?{kind:"serious",label:"Close"}:{kind:"crit",label:better==="higher"?"Below target":"Above target"};share=better==="higher"?Math.min(1,a.v/target):Math.min(1,target/a.v)}
+      else{const ok=better==="higher"?a.v>=target:a.v<=target,close=better==="higher"?a.v>=target*0.95:a.v<=target*1.05;st=ok?{kind:"good",label:"On target"}:close?{kind:"serious",label:"Close"}:{kind:"crit",label:better==="higher"?"Below target":"Above target"};share=Math.max(0,better==="higher"?Math.min(1,a.v/target):Math.min(1,target/a.v))}
     }
     if(t.stream!==cur){cur=t.stream;h+=`<tr class="grp"><td colspan="6">${groups[cur]}</td></tr>`}
     h+=`<tr><td>${esc(t.label)}${t.extra?`<div class="evmeta">${esc(t.extra)}</div>`:""}</td><td class="num">${better==="lower"?"≤ ":""}${show(t,target)}</td><td class="num"><b>${show(t,a.v)}</b>${t.kind==="total"&&a.n&&a.n<+p.slice(5,7)?`<div class="evmeta">${a.n} month${a.n===1?"":"s"} uploaded</div>`:""}</td><td class="num">${exp==null?"–":show(t,exp)}</td><td>${share!=null?`<div class="bar"><b style="width:${Math.min(1,share)*100}%"></b>${mark!=null?`<i style="left:calc(${mark*100}% - 1px)"></i>`:""}</div>`:""}</td><td>${pill(st.kind,st.label)}</td></tr>`;
@@ -912,6 +962,7 @@ async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
+    try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
     Object.assign(D,{metrics,events:events.filter(e=>!e.merged_into),snaps});
     D.alias={};D.short={};events.filter(e=>e.merged_into).forEach(e=>{D.alias[e.code]=e.merged_into;D.short[e.merged_into]=D.short[e.merged_into]||e.code});index();

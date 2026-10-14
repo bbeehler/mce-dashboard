@@ -60,6 +60,13 @@ td.n{text-align:right}
 .tin:focus-within{outline:2px solid var(--accent);outline-offset:1px}.tin span{color:var(--muted)}
 .tin.changed{border-color:var(--accent)}
 @media (max-width:560px){#atForm th:nth-child(2),#atForm td:nth-child(2){display:none}.tin input{width:64px}.tgt th,.tgt td{padding:6px}.seg button[aria-pressed="true"]{background:var(--accent)}}
+.sn-grid{display:grid;grid-template-columns:repeat(3,minmax(0,140px)) 1fr;gap:12px;align-items:end;margin:12px 0}
+.sn-grid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2)}
+.sn-grid .tin input{width:100%}
+.sn-score{display:flex;flex-direction:column;gap:2px;padding-left:8px}.sn-score b{font-size:26px;line-height:1.1}
+.sn-note{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2);margin-bottom:10px}
+.sn-note textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:6px;padding:8px 10px;resize:vertical}
+@media (max-width:560px){.sn-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sn-score{grid-column:1/-1;padding-left:0}}
 ol{margin:0;padding-left:20px;display:grid;gap:4px}
 @media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month]{min-width:0;width:100%}}
 </style>
@@ -130,6 +137,22 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div id="atMsg"></div>
   </section>
 
+  <section class="card" id="sentimentCard" hidden>
+    <h2>6. Monthly sentiment</h2>
+    <p>Enter the month's positive, neutral and negative mentions from your social listening or scheduling tool. Counts or percentages both work. The dashboard turns them into a <b>net sentiment score</b> from −100 (all negative) to +100 (all positive): positive minus negative, as a share of all mentions.</p>
+    <div class="row"><label for="snMonth">Month</label><input id="snMonth" type="month"></div>
+    <div class="sn-grid">
+      <label>Positive<span class="tin"><input id="snPos" inputmode="decimal" aria-label="Positive mentions"></span></label>
+      <label>Neutral<span class="tin"><input id="snNeu" inputmode="decimal" aria-label="Neutral mentions"></span></label>
+      <label>Negative<span class="tin"><input id="snNeg" inputmode="decimal" aria-label="Negative mentions"></span></label>
+      <div class="sn-score"><span class="muted">Net sentiment</span><b id="snScore">–</b><span id="snMix" class="muted"></span></div>
+    </div>
+    <label class="sn-note">What drove it? <span class="muted">(optional, shown on the dashboard)</span><textarea id="snNote" rows="2" maxlength="1000" placeholder="e.g. Praise for CCIF Montréal speakers; complaints about registration fees"></textarea></label>
+    <div class="row"><button id="snSave" type="button">Save sentiment</button><span class="muted" id="snHint"></span></div>
+    <div id="snMsg"></div>
+    <div class="tbl" style="margin-top:12px"><table id="snHist"></table></div>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -182,7 +205,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -309,6 +332,7 @@ const TG=[
  ["Communications","communications","insightly","broad_sends_avg","","lower","dec","Broad sends to a member per month","Monthly average; lower is better (audit cap ~9)","avg:broad_sends_main_list"],
  ["Communications","communications","social","followers","LinkedIn","higher","n","LinkedIn followers","At year end","level"],
  ["Communications","communications","social","engagements_all","","higher","n","Social engagements, all platforms","Total for the year","sumdims:engagements"],
+ ["Communications","communications","sentiment","net_sentiment","","higher","dec","Net sentiment score","−100 to +100, year to date","net"],
  ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","All events in the year: held, plus registrations for events still to come","event"],
  ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance","Events held during the year","event"],
  ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","All events in the year, from revenue uploaded","event"],
@@ -324,6 +348,7 @@ function soFar(t,rows,y){
   if(k==="rate"){const [a,b]=arg.split("/"),A=get(a),B=get(b),ms=Object.keys(A).filter(m=>m in B);const den=ms.reduce((s,m)=>s+B[m],0);return den?{v:ms.reduce((s,m)=>s+A[m],0)/den,n:ms.length}:null}
   if(k==="avg"){const o=get(arg),ms=Object.keys(o);return ms.length?{v:Object.values(o).reduce((a,b)=>a+b,0)/ms.length,n:ms.length}:null}
   if(k==="level"){const o=get(t.metric,t.dimension),ms=Object.keys(o).sort();return ms.length?{v:o[ms[ms.length-1]],n:ms.length,latest:ms[ms.length-1]}:null}
+  if(k==="net"){const g=m=>Object.values(get(m)).reduce((a,b)=>a+b,0),p=g("sent_positive"),u=g("sent_neutral"),n=g("sent_negative"),t=p+u+n,ms=Object.keys(get("sent_positive")).length;return t?{v:(p-n)/t*100,n:ms}:null}
   if(k==="sumdims"){const o=yr.filter(r=>r.metric===arg),ms=new Set(o.map(r=>r.period));return o.length?{v:o.reduce((a,r)=>a+Number(r.value),0),n:ms.size}:null}
   return null;
 }
@@ -392,6 +417,40 @@ $("atSave").onclick=async()=>{
   $("atSave").disabled=true;msg("atMsg","warn","Saving…");
   try{const r=await call("attendance",{items});await loadAttendance();msg("atMsg","ok",`Saved attendance for ${r.saved} event${r.saved===1?"":"s"}. <a href="./">Open the dashboard</a> to see it in the targets.`)}
   catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("atMsg","err",`Not saved: ${esc(err.message)}`);$("atSave").disabled=false}
+};
+
+/* ---------- monthly sentiment ---------- */
+let snRows={},snNotes={};
+const snNum=v=>{const t=String(v??"").trim().replace(/[,%\s]/g,"");if(t==="")return null;const n=Number(t);return Number.isFinite(n)&&n>=0?n:NaN};
+const netOf=(p,u,n)=>{const t=p+u+n;return t>0?Math.round((p-n)/t*100):null};
+function snPreview(){const p=snNum($("snPos").value),u=snNum($("snNeu").value),n=snNum($("snNeg").value);
+  if([p,u,n].some(x=>x==null||Number.isNaN(x))){$("snScore").textContent="–";$("snMix").textContent=[p,u,n].some(Number.isNaN)?"Use numbers only":"";return}
+  const s=netOf(p,u,n),t=p+u+n;$("snScore").textContent=s==null?"–":(s>0?"+":"")+s;$("snMix").textContent=t?`${Math.round(p/t*100)}% positive · ${Math.round(u/t*100)}% neutral · ${Math.round(n/t*100)}% negative`:""}
+function snFill(){const m=$("snMonth").value+"-01",r=snRows[m];
+  $("snPos").value=r?.sent_positive??"";$("snNeu").value=r?.sent_neutral??"";$("snNeg").value=r?.sent_negative??"";$("snNote").value=snNotes[m]??"";
+  $("snHint").textContent=r?`${monthLabel(m)} already has a score; saving replaces it.`:"";snPreview()}
+async function loadSentiment(){
+  if(!$("snMonth").value){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);$("snMonth").value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
+  try{const [vals,notes]=await Promise.all([sbGet("metric_values?select=period,metric,value&source=eq.sentiment&order=period.desc"),sbGet("month_notes?select=period,note&topic=eq.sentiment")]);
+    snRows={};vals.forEach(v=>{(snRows[v.period]??={})[v.metric]=Number(v.value)});snNotes={};notes.forEach(n=>snNotes[n.period]=n.note)}catch(e){snRows={};snNotes={}}
+  const ms=Object.keys(snRows).sort().reverse().slice(0,12);
+  $("snHist").innerHTML=ms.length?`<thead><tr><th>Month</th><th style="text-align:right">Positive</th><th style="text-align:right">Neutral</th><th style="text-align:right">Negative</th><th style="text-align:right">Net score</th></tr></thead><tbody>${ms.map(m=>{const r=snRows[m],s=netOf(r.sent_positive||0,r.sent_neutral||0,r.sent_negative||0);return `<tr><td>${monthLabel(m)}</td><td class="n">${fmt(r.sent_positive)}</td><td class="n">${fmt(r.sent_neutral)}</td><td class="n">${fmt(r.sent_negative)}</td><td class="n"><b>${s==null?"–":(s>0?"+":"")+s}</b></td></tr>`}).join("")}</tbody>`:'<tbody><tr><td class="muted">No sentiment entered yet.</td></tr></tbody>';
+  snFill();
+}
+["snPos","snNeu","snNeg"].forEach(id=>$(id).addEventListener("input",snPreview));
+$("snMonth").addEventListener("input",snFill);
+$("snSave").onclick=async()=>{
+  const period=$("snMonth").value+"-01",p=snNum($("snPos").value),u=snNum($("snNeu").value),n=snNum($("snNeg").value);
+  if(!$("snMonth").value){msg("snMsg","err","Choose the month.");return}
+  const blank=[p,u,n].every(x=>x==null);
+  if(!blank&&[p,u,n].some(x=>x==null||Number.isNaN(x))){msg("snMsg","err","Fill in positive, neutral and negative with numbers (use 0 if there were none).");return}
+  if(blank&&!snRows[period]){msg("snMsg","err","Enter positive, neutral and negative for the month.");return}
+  if(blank&&!confirm(`Clear the sentiment score for ${monthLabel(period)}?`))return;
+  $("snSave").disabled=true;msg("snMsg","warn","Saving…");
+  try{await call("sentiment",{period,positive:blank?null:p,neutral:blank?null:u,negative:blank?null:n,note:$("snNote").value.trim()||null});
+    await loadSentiment();msg("snMsg","ok",blank?`Cleared ${monthLabel(period)}.`:`Saved sentiment for ${monthLabel(period)}: net score ${(()=>{const s=netOf(p,u,n);return (s>0?"+":"")+s})()}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a>.`)}
+  catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("snMsg","err",`Not saved: ${esc(err.message)}`)}
+  $("snSave").disabled=false;
 };
 
 async function loadHistory(){

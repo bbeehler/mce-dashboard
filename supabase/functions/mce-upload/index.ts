@@ -5,6 +5,7 @@
 //   POST {action:"save", passcode, period, metrics, events, targets, filename}
 //   POST {action:"targets", passcode, year, targets}        -> set or clear yearly targets
 //   POST {action:"attendance", passcode, items:[{code, attendance}]} -> set or clear event attendance
+//   POST {action:"sentiment", passcode, period, positive, neutral, negative, note} -> monthly sentiment
 //
 // The passcode lives only in the MCE_UPLOAD_PASSCODE secret. Writes use the service role,
 // so the public site never holds a key that can change data.
@@ -12,7 +13,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = ["https://bbeehler.github.io"];
 const STREAMS = new Set(["marketing", "communications", "engagement"]);
-const SOURCES = new Set(["ga4", "insightly", "social", "pheedloop"]);
+const SOURCES = new Set(["ga4", "insightly", "social", "pheedloop", "sentiment"]);
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
@@ -94,6 +95,33 @@ Deno.serve(async (req) => {
       if (error) return json({ error: `Saving attendance for ${i.code} failed: ${error.message}` }, 500, h);
     }
     return json({ ok: true, saved: items.length }, 200, h);
+  }
+
+  // Monthly sentiment: {period, positive, neutral, negative, note}. Counts or percentages both work, since the
+  // dashboard only uses their proportions. All three blank (null) clears the month.
+  if (body.action === "sentiment") {
+    const { period, positive, neutral, negative, note } = body;
+    if (!isPeriod(period)) return json({ error: "Choose the month." }, 400, h);
+    const vals = [positive, neutral, negative];
+    const blank = vals.every((v) => v === null);
+    if (!blank && vals.some((v) => !(typeof v === "number" && Number.isFinite(v) && v >= 0))) return json({ error: "Positive, neutral and negative must all be numbers (counts or percentages)." }, 400, h);
+    if (!blank && positive + neutral + negative <= 0) return json({ error: "At least one of positive, neutral or negative must be above zero." }, 400, h);
+    if (note != null && (typeof note !== "string" || note.length > 1000)) return json({ error: "Keep the themes note under 1,000 characters." }, 400, h);
+    const keys = ["sent_positive", "sent_neutral", "sent_negative"];
+    if (blank) {
+      const { error } = await db.from("metric_values").delete().eq("period", period).eq("source", "sentiment");
+      if (error) return json({ error: `Clearing sentiment failed: ${error.message}` }, 500, h);
+    } else {
+      const rows = keys.map((k, i) => ({ period, stream: "communications", source: "sentiment", brand: "All", metric: k, dimension: "", value: vals[i], updated_by: "upload page" }));
+      const { error } = await db.from("metric_values").upsert(rows, { onConflict: "period,source,brand,metric,dimension" });
+      if (error) return json({ error: `Saving sentiment failed: ${error.message}` }, 500, h);
+    }
+    const text = typeof note === "string" ? note.trim() : "";
+    const { error: ne } = text && !blank
+      ? await db.from("month_notes").upsert({ period, topic: "sentiment", note: text, updated_at: new Date().toISOString() }, { onConflict: "period,topic" })
+      : await db.from("month_notes").delete().eq("period", period).eq("topic", "sentiment");
+    if (ne) return json({ error: `Saving the themes note failed: ${ne.message}` }, 500, h);
+    return json({ ok: true }, 200, h);
   }
 
   if (body.action !== "save") return json({ error: "Unknown action." }, 400, h);

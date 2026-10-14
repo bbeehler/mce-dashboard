@@ -70,7 +70,7 @@ async function buildBrief() {
   for (const m of metrics) val[`${m.source}|${m.metric}|${m.dimension}|${m.period.slice(0, 7)}`] = Number(m.value);
   const get = (s: string, m: string, d: string, p: string) => val[`${s}|${m}|${d}|${p}`] ?? null;
   const lines: string[] = [];
-  for (const src of ["ga4", "insightly", "social"]) {
+  for (const src of ["ga4", "insightly", "social", "sentiment"]) {
     const keys = [...new Set(metrics.filter((m) => m.source === src).map((m) => `${m.metric}|${m.dimension}`))].sort();
     const used = months.filter((p) => keys.some((k) => get(src, k.split("|")[0], k.split("|")[1], p) != null));
     if (!keys.length) continue;
@@ -90,6 +90,17 @@ async function buildBrief() {
     const share = s && os != null ? os / s : null, er = s && en != null ? en / s : null;
     const flag = share != null && er != null && share > 0.5 && er < 0.25 ? "low-quality traffic spike" : "";
     lines.push(`${p} | ${pc(er)} | ${pc(share)} | ${en && ke != null ? r1((ke / en) * 1000) : ""} | ${dl && op != null ? pc(op / dl) : ""} | ${dl && cl != null ? pc(cl / dl) : ""} | ${bs && oo != null ? r1(oo / bs) : ""} | ${bs ?? ""} | ${flag}`);
+  }
+
+  // Net sentiment per month and what drove it.
+  const { data: notes } = await db.from("month_notes").select("period,topic,note").eq("topic", "sentiment");
+  const sm = months.filter((p) => get("sentiment", "sent_positive", "", p) != null);
+  if (sm.length) {
+    lines.push(`\n## Net sentiment (positive minus negative as a share of all mentions, -100 to +100)\nmonth | net score | what drove it`);
+    for (const p of sm) {
+      const a = get("sentiment", "sent_positive", "", p) ?? 0, b = get("sentiment", "sent_neutral", "", p) ?? 0, c = get("sentiment", "sent_negative", "", p) ?? 0, t = a + b + c;
+      lines.push(`${p} | ${t ? Math.round(((a - c) / t) * 100) : ""} | ${(notes ?? []).find((n: any) => n.period.slice(0, 7) === p)?.note ?? ""}`);
+    }
   }
 
   // Events: PheedLoop events with targets, short codes and month-end registration history.
