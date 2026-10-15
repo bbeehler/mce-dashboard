@@ -12,7 +12,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = ["https://bbeehler.github.io"];
-const STREAMS = new Set(["marketing", "communications", "engagement"]);
+const STREAMS = new Set(["marketing", "communications", "engagement", "membership"]);
 const SOURCES = new Set(["ga4", "insightly", "social", "pheedloop", "sentiment"]);
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });

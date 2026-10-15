@@ -120,6 +120,24 @@ async function buildBrief() {
     for (const t of targets) lines.push(`${t.year} | ${t.stream} | ${t.metric}${t.dimension ? " · " + t.dimension : ""} | ${t.target} | ${t.better}`);
   } else lines.push(`\n## Yearly targets\nNone set yet.`);
 
+  // Membership, live from Insightly (totals only).
+  try {
+    const { data: last } = await db.from("member_snap").select("as_of,year").order("as_of", { ascending: false }).limit(1).maybeSingle();
+    if (last) {
+      const snap = await all("member_snap", "metric,dimension,value", (q) => q.eq("as_of", last.as_of));
+      const mon = await all("member_monthly", "period,metric,value", (q) => q.order("period"));
+      const v = (m: string) => snap.find((r: any) => r.metric === m && !r.dimension)?.value ?? "";
+      lines.push(`\n## Membership, live from Insightly as of ${last.as_of} (membership year ${last.year}; member = last membership year ${last.year} or later; 2050 = lifetime/complimentary, mostly Industry Engagement Network affiliates)`);
+      lines.push(`members ${v("members")} (lifetime ${v("lifetime")}) | renewed ${v("renewed")} | new ${v("new")} | returning ${v("returning")} | ${last.year - 1} members not renewed ${v("not_renewed")} (of which resigned/non-renewed ${v("not_renewed_resigned")}) | renewal rate ${pc(Number(v("renewal_rate")))} | dues before tax ${v("dues")} | paid incl. tax ${v("paid")} | already renewed for next year ${v("renewed_next")}`);
+      const mix = snap.filter((r: any) => r.metric === "mix").map((r: any) => `${r.dimension}=${r.value}`);
+      lines.push(`member mix: ${mix.join("; ")}`);
+      lines.push(`monthly flows (payments and dues_paid are the current renewal cycle by month of each member's latest payment; joined by AIAC Joined Date; resigned by resignation date)\nmonth | payments | dues_paid | joined | resigned`);
+      const ps = [...new Set(mon.map((r: any) => r.period.slice(0, 7)))].sort();
+      const mv = (p: string, m: string) => mon.find((r: any) => r.period.slice(0, 7) === p && r.metric === m)?.value ?? "";
+      for (const p of ps) lines.push(`${p} | ${mv(p, "payments")} | ${mv(p, "dues_paid")} | ${mv(p, "joined")} | ${mv(p, "resigned")}`);
+    }
+  } catch { /* membership is optional */ }
+
   // Send plan from the eBlast calendar (next 8 weeks).
   try {
     const r = await fetch(EBLAST_URL, { headers: { "cache-control": "no-cache" } });
@@ -146,7 +164,8 @@ House rules the team works by:
 - Website: judge traffic by engaged sessions and key events, not raw sessions. Months flagged "low-quality traffic spike" (mostly Organic Social, under 25% engaged) are likely boosted posts or bots.
 - Email: the 2026 send audit sets about 9 broad emails a month per member on the main list, at most 2 broad sends a week, never two the same day, reminder series stopping at 3, and one partner email a month. Opt-outs per broad send is the fatigue signal.
 - Events: compare registrations with target and, where linked, with last year's event at the same number of months out.
-- Targets are yearly; totals are paced evenly across the year.`;
+- Targets are yearly; totals are paced evenly across the year.
+- Membership: renewals cluster November to March because that is when invoices and reminders go out. When relating marketing activity to membership, describe timing and overlap, not proven cause, and say that campaign tracking links would be needed to attribute members to campaigns.`;
 
 Deno.serve(async (req) => {
   const h = cors(req.headers.get("origin") ?? "");

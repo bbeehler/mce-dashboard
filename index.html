@@ -259,6 +259,11 @@ footer p{margin:0}
 .seg button+button{border-left:1px solid rgba(255,255,255,.25)}
 .seg button[aria-pressed="true"]{background:#fff;color:var(--brand);font-weight:600}
 .stream{display:grid;gap:12px}
+.ml{display:grid;gap:4px}
+.ml h4{margin:10px 0 0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.ml h4 .sub{font-size:12px}
+.mlread{margin-top:14px;font-size:13px;color:var(--ink-2);border-left:3px solid var(--grid);padding-left:12px;display:grid;gap:6px}
+.mlread p{margin:0}.mlread b{color:var(--ink)}
 .stream .sec-head{margin:6px 0 0;border-bottom:2px solid var(--ink);padding-bottom:6px}
 .sub-h{font-size:12.5px;color:var(--muted)}
 .chg{font-weight:600}
@@ -335,6 +340,16 @@ footer p{margin:0}
     <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
     <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
+  </section>
+
+  <section class="stream" aria-labelledby="mbH">
+    <div class="sec-head"><h2 id="mbH">Membership</h2><span class="sub-h"><span id="mbLive">Live from Insightly</span> · <a href="membership.html">Open the Membership page →</a></span></div>
+    <div class="card"><h3>Membership now <span class="sub" id="mbSub"></span></h3><div class="tiles" id="mbTiles"></div></div>
+    <div class="card"><h3>Marketing activity and member payments, month by month <span class="sub" id="mlSub"></span></h3>
+      <div class="ml" id="mlCharts"></div>
+      <div class="legend"><span><i class="sw" style="--c:var(--ink-2)"></i>Renewal season, November to March</span><span><i class="sw" style="--c:var(--ink-2);opacity:.32"></i>Rest of the year</span></div>
+      <div class="mlread" id="mlRead"></div>
+    </div>
   </section>
 
   <footer>
@@ -793,6 +808,10 @@ const TARGETS=[
   {stream:"engagement",source:"pheedloop",metric:"registrations_held",label:"Event registrations, all events this year",kind:"event",f:"regs"},
   {stream:"engagement",source:"pheedloop",metric:"attendance_held",label:"Event attendance, events held",kind:"event",f:"att"},
   {stream:"engagement",source:"pheedloop",metric:"revenue_held",label:"Event revenue, all events this year",kind:"event",f:"rev",money:true},
+  {stream:"membership",source:"insightly_members",metric:"members",label:"Members",kind:"member"},
+  {stream:"membership",source:"insightly_members",metric:"renewal_rate",label:"Membership renewal rate",kind:"member",rate:true},
+  {stream:"membership",source:"insightly_members",metric:"new",label:"New members",kind:"member"},
+  {stream:"membership",source:"insightly_members",metric:"dues",label:"Membership dues (before tax)",kind:"member",money:true},
 ];
 function targetActual(t,p){
   const k=YTD;YTD=true;try{
@@ -803,6 +822,7 @@ function targetActual(t,p){
       const evs=yearEvents(+p.slice(0,4)),held=evs.filter(e=>e.held),up=evs.filter(e=>!e.held);
       const sum=a=>a.reduce((s,e)=>s+(e[t.f]||0),0),vHeld=sum(held),vUp=t.f==="att"?0:sum(up);
       return{v:vHeld+vUp,vHeld,vUp,held,up,withData:evs.filter(e=>e[t.f]!=null&&e[t.f]>0).length,n:evs.length}}
+    if(t.kind==="member"){const v=D.mem&&D.mem.year===+p.slice(0,4)?D.mem.snap[t.metric]:null;return{v:v??null,n:0}}
     if(t.kind==="net"){const used=keptMonths(p,"sentiment",["sent_positive"],"");const v=sentNet(p);return{v:v==null?null:v*100,n:used.length}}
     if(t.kind==="rate"){const used=keptMonths(p,t.source,[t.num,t.den],"");return{v:rv(p,t.source,t.num,t.den),n:used.length}}
     if(t.kind==="avg"){const used=keptMonths(p,t.source,[t.base],"");return{v:used.length?val(p,t.source,t.base)/used.length:null,n:used.length}}
@@ -816,14 +836,15 @@ function renderTargets(){
   const p=state.month,y=+p.slice(0,4),list=TARGETS.map(t=>({...t,tg:D.targets.find(x=>x.year===y&&x.stream===t.stream&&x.source===t.source&&x.metric===t.metric&&(x.dimension||"")===(t.dimension||""))})).filter(t=>t.tg);
   $("tgTitle").textContent=`${y} targets`;$("tgSub").textContent=`· year to date, through ${mLabel(p,{month:"long"})}`;
   if(!list.length){$("tgTable").innerHTML="";$("tgNote").innerHTML=`No targets set for ${y} yet. Set them under <a href="upload.html#targetsCard">Yearly targets on the Upload month page</a>; the dashboard will then show whether each measure is on pace.`;return}
-  const show=(t,v)=>v==null?"–":t.kind==="net"?(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v)):t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
-  const groups={marketing:"Marketing",communications:"Communications",engagement:"Engagement"};let cur="",h=`<thead><tr><th>Measure</th><th class="num">${y} target</th><th class="num">So far</th><th class="num">Expected by now</th><th style="width:22%">Progress</th><th>Status</th></tr></thead><tbody>`;
+  const show=(t,v)=>v==null?"–":t.kind==="member"?(t.money?money(v):t.rate?pct(v):fmt(v)):t.kind==="net"?(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v)):t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
+  const groups={marketing:"Marketing",communications:"Communications",engagement:"Engagement",membership:"Membership (live from Insightly)"};let cur="",h=`<thead><tr><th>Measure</th><th class="num">${y} target</th><th class="num">So far</th><th class="num">Expected by now</th><th style="width:22%">Progress</th><th>Status</th></tr></thead><tbody>`;
   for(const t of list){
     const target=Number(t.tg.target),better=t.tg.better||(t.dec||t.metric==="broad_sends_avg"?"lower":"higher"),a=targetActual(t,p);
     let exp=null,st={kind:"none",label:"No data yet"},share=null,mark=null;
     if(a.v!=null){
       if(t.kind==="total"){exp=target*a.n/12;share=a.v/target;mark=exp/target;const r=a.v/exp;st=r>=1?{kind:"good",label:r>=1.1?"Ahead":"On pace"}:r>=0.9?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
       else if(t.kind==="level"){exp=a.start+(target-a.start)*a.n/12;share=Math.min(1,a.v/target);mark=Math.min(1,exp/target);const need=exp-a.start,got=a.v-a.start;const r=need>0?got/need:1;st=r>=1?{kind:"good",label:"On pace"}:r>=0.8?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
+      else if(t.kind==="member"&&!t.rate){share=a.v/target;st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`}}
       else if(t.kind==="event"){share=a.v/target;mark=a.vUp?Math.min(1,a.vHeld/target):null;
         st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`};
         const f=v=>t.money?money(v):fmt(v);
@@ -953,9 +974,57 @@ function renderDiscipline(){
   $("discNote").innerHTML=`Cap is two broad sends a week (dashed line). <a href="https://bbeehler.github.io/eblast-calendar/">Open the eBlast calendar</a>.`;
 }
 
+/* ---------- membership (live from Insightly) and its link with marketing ---------- */
+const memM=(p,m)=>{if(!D.mem)return null;const r=D.mem.monthly.find(x=>x.period===p&&x.metric===m);return r?Number(r.value):0};
+const inSeason=p=>{const m=+p.slice(5,7);return m>=11||m<=3};
+function renderMembership(){
+  const M=D.mem;
+  if(!M){$("mbTiles").innerHTML='<p class="empty-note">Membership numbers haven\'t synced from Insightly yet.</p>';$("mlCharts").innerHTML="";$("mlRead").innerHTML="";return}
+  const s=M.snap,Y=M.year,tg=m=>{const t=D.targets.find(x=>x.year===Y&&x.stream==="membership"&&x.metric===m);return t?Number(t.target):null};
+  const tgTxt=(m,f)=>{const t=tg(m);return t==null?"":` · target ${f(t)}`};
+  $("mbLive").textContent=`Live from Insightly · ${new Date(M.asOf+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}`;
+  $("mbSub").textContent=`· ${Y} membership year, as of today (not affected by the month picker)`;
+  const tiles=[["Members",fmt(s.members),`${fmt(s.members-s.lifetime)} paying + ${fmt(s.lifetime)} lifetime${tgTxt("members",fmt)}`,"--s1"],
+    ["Renewal rate",pct(s.renewal_rate,0),`${fmt(s.renewed)} of ${fmt(s.renewed+s.not_renewed)} ${Y-1} members${tgTxt("renewal_rate",v=>pct(v,0))}`,"--s1"],
+    ["New members",fmt(s.new),`Joined in ${Y}${s.returning?` · ${fmt(s.returning)} returning`:""}${tgTxt("new",fmt)}`,"--s1"],
+    ["Dues",money(s.dues),`Before tax${tgTxt("dues",money)}`,"--s1"]];
+  $("mbTiles").innerHTML=tiles.map(([k,v,d,c])=>`<div class="tile"><div class="t-k"><i style="--c:var(${c})"></i>${k}</div><div class="t-v">${v}</div><div class="t-d">${d}</div></div>`).join("");
+
+  // Same 12 months for every row, ending at the selected month. Renewal-season months in full colour.
+  const months=[];for(let i=11;i>=0;i--)months.push(shiftMonth(state.month,-i));
+  $("mlSub").textContent=`· ${mLabel(months[0])} to ${mLabel(months[11])}`;
+  const rows=[
+    {name:"Membership payments",sub:"renewals and new members, by month paid",color:"--s1",vals:months.map(p=>memM(p,"payments")),tip:i=>`${fmt(memM(months[i],"payments"))} payments · ${money(memM(months[i],"dues_paid"))} dues`,fmtv:fmt},
+    {name:"Email campaigns sent",sub:"Insightly, all lists",color:"--s2",vals:monthly(()=>months.map(p=>mval(p,"insightly","campaign_sends"))),fmtv:fmt},
+    {name:"Engaged website sessions",sub:"GA4",color:"--s3",vals:monthly(()=>months.map(p=>mval(p,"ga4","engaged_sessions"))),fmtv:fmt},
+    {name:"Social engagements",sub:"all platforms",color:"--s4",vals:monthly(()=>months.map(p=>{let t=null;for(const pl of PLATFORMS){const v=mval(p,"social","engagements",pl);if(v!=null)t=(t||0)+v}return t})),fmtv:fmt},
+  ];
+  const host=$("mlCharts");host.innerHTML="";
+  rows.forEach((r,ri)=>{
+    const has=r.vals.some(v=>v!=null&&v>0),tot=r.vals.reduce((a,v)=>a+(v||0),0);
+    host.insertAdjacentHTML("beforeend",`<h4>${r.name} <span class="sub">${r.sub} · ${has?fmt(tot)+" in these 12 months":"no data for these months"}</span></h4><div id="ml${ri}"></div>`);
+    colChart($("ml"+ri),{labels:months.map(mShort),values:r.vals.map(v=>v||0),height:ri===0?120:96,axis:false,colorFor:()=>r.color,dimFor:i=>!inSeason(months[i]),
+      labelIf:(i,v)=>v>0&&v===Math.max(...r.vals.map(x=>x||0)),yFmt:fmtShort,
+      tip:i=>`<b>${mLabel(months[i],{month:"long",year:"numeric"})}</b><div>${r.vals[i]==null?"Not uploaded":r.tip?r.tip(i):`${r.name}: <b>${fmt(r.vals[i])}</b>`}</div>`,aria:r.name+" by month"});
+  });
+
+  // Plain-language readout: how much of each happened in renewal season, per month on average.
+  const pay=rows[0].vals,payTot=pay.reduce((a,b)=>a+b,0);
+  const lines=[];
+  if(payTot){const sIn=months.filter(inSeason).reduce((a,p)=>a+memM(p,"payments"),0);
+    lines.push(`<p><b>${pct(sIn/payTot,0)} of membership payments</b> in these months came during renewal season (November to March).</p>`)}
+  const avg=(r,inS)=>{const ix=months.map((p,i)=>i).filter(i=>inSeason(months[i])===inS&&r.vals[i]!=null);return ix.length?{v:ix.reduce((a,i)=>a+r.vals[i],0)/ix.length,n:ix.length}:null};
+  const cmp=rows.slice(1).map(r=>{const a=avg(r,true),b=avg(r,false);if(!a||!b||!b.v)return null;const d=a.v/b.v-1;
+    return `${r.name.toLowerCase()} averaged <b>${fmt(a.v)}</b> a month in season against ${fmt(b.v)} the rest of the year (${d>=0?"+":"−"}${pct(Math.abs(d),0)})`}).filter(Boolean);
+  if(cmp.length)lines.push(`<p>Over the same months, ${cmp.join("; ")}.</p>`);
+  else lines.push(`<p>Marketing numbers for renewal-season months aren't uploaded for this window yet, so there's nothing to compare.</p>`);
+  lines.push(`<p class="muted">Read this as timing, not proof: renewal invoices and reminders go out in the same months as the marketing push. To link a member to a campaign directly, membership emails and pages need their own tracking links (for example a “membership” UTM campaign), which can then be uploaded each month.</p>`);
+  $("mlRead").innerHTML=lines.join("");
+}
+
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline()}
+function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership()}
 function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view==="ytd")u.searchParams.set("view","ytd");else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
@@ -963,6 +1032,9 @@ async function boot(){
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
+    try{const last=await rest("member_snap","select=as_of,year&order=as_of.desc&limit=1");
+      if(last.length){const [snap,monthly]=await Promise.all([rest("member_snap",`select=metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`),rest("member_monthly","select=period,metric,value&order=period")]);
+        D.mem={asOf:last[0].as_of,year:last[0].year,snap:Object.fromEntries(snap.map(r=>[r.metric,Number(r.value)])),monthly}}}catch(e){D.mem=null}
     Object.assign(D,{metrics,events:events.filter(e=>!e.merged_into),snaps});
     D.alias={};D.short={};events.filter(e=>e.merged_into).forEach(e=>{D.alias[e.code]=e.merged_into;D.short[e.merged_into]=D.short[e.merged_into]||e.code});index();
   }catch(e){$("main").insertAdjacentHTML("afterbegin",'<p class="card empty-note">The dashboard data didn\'t load. Refresh the page in a minute.</p>');return}

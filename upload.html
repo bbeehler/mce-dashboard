@@ -336,8 +336,12 @@ const TG=[
  ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","All events in the year: held, plus registrations for events still to come","event"],
  ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance","Events held during the year","event"],
  ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","All events in the year, from revenue uploaded","event"],
+ ["Membership","membership","insightly_members","members","","higher","n","Members","Organisations whose last membership year is this year or later (lifetime included), from Insightly","member:members"],
+ ["Membership","membership","insightly_members","renewal_rate","","higher","pct","Renewal rate","Last year's members who renewed (lifetime members left out)","member:renewal_rate"],
+ ["Membership","membership","insightly_members","new","","higher","n","New members","Members who joined during the year","member:new"],
+ ["Membership","membership","insightly_members","dues","","higher","money","Membership dues","Dues before tax for the year","member:dues"],
 ].map(([group,stream,source,metric,dimension,better,unit,label,how,kind])=>({group,stream,source,metric,dimension,better,unit,label,how,kind}));
-let tgYear=new Date().getFullYear(),tgSaved=[];
+let tgYear=new Date().getFullYear(),tgSaved=[],MEM=[];
 const tgKey=t=>`${t.stream}|${t.source}|${t.metric}|${t.dimension}`;
 const tgShow=(t,v)=>v==null?"–":t.unit==="pct"?(v*100).toFixed(1)+"%":t.unit==="dec"?v.toFixed(1):t.unit==="money"?"$"+fmt(Math.round(v)):fmt(Math.round(v));
 const tgIn=(t,v)=>v==null?"":t.unit==="pct"?+(v*100).toFixed(2)+"":t.unit==="dec"?+v.toFixed(2)+"":String(Math.round(v));
@@ -349,6 +353,7 @@ function soFar(t,rows,y){
   if(k==="avg"){const o=get(arg),ms=Object.keys(o);return ms.length?{v:Object.values(o).reduce((a,b)=>a+b,0)/ms.length,n:ms.length}:null}
   if(k==="level"){const o=get(t.metric,t.dimension),ms=Object.keys(o).sort();return ms.length?{v:o[ms[ms.length-1]],n:ms.length,latest:ms[ms.length-1]}:null}
   if(k==="net"){const g=m=>Object.values(get(m)).reduce((a,b)=>a+b,0),p=g("sent_positive"),u=g("sent_neutral"),n=g("sent_negative"),t=p+u+n,ms=Object.keys(get("sent_positive")).length;return t?{v:(p-n)/t*100,n:ms}:null}
+  if(k==="member"){const r=MEM.filter(x=>x.year===y&&x.metric===arg);return r.length?{v:Number(r[0].value),n:0,member:true}:null}
   if(k==="sumdims"){const o=yr.filter(r=>r.metric===arg),ms=new Set(o.map(r=>r.period));return o.length?{v:o.reduce((a,r)=>a+Number(r.value),0),n:ms.size}:null}
   return null;
 }
@@ -358,12 +363,13 @@ async function loadTargets(){
   $("tgYears").querySelectorAll("button").forEach(b=>b.onclick=()=>{tgYear=+b.dataset.y;loadTargets()});
   try{const r=await fetch(`${SUPABASE_URL}/rest/v1/targets?select=year,stream,source,metric,dimension,target&year=eq.${tgYear}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});tgSaved=r.ok?await r.json():[]}catch(e){tgSaved=[]}
   let rows=[];try{rows=await loadExisting()}catch(e){}
+  try{const last=await sbGet("member_snap?select=as_of&order=as_of.desc&limit=1");MEM=last.length?await sbGet(`member_snap?select=year,metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`):[]}catch(e){MEM=[]}
   let grp="",h=`<thead><tr><th>Measure</th><th style="text-align:right">${tgYear} so far</th><th style="text-align:right">${tgYear} target</th></tr></thead><tbody>`;
   TG.forEach((t,i)=>{
     const cur=tgSaved.find(x=>tgKey({...x,dimension:x.dimension||""})===tgKey(t)),sf=soFar(t,rows,tgYear);
     if(t.group!==grp){grp=t.group;h+=`<tr class="grp"><td colspan="3">${grp}</td></tr>`}
     const pre=t.unit==="money"?"$":t.better==="lower"?"≤":"",suf=t.unit==="pct"?"%":"";
-    h+=`<tr><td>${esc(t.label)}<div class="how">${esc(t.how)}</div></td><td class="n">${t.kind==="event"?'<span class="muted">see dashboard</span>':sf?`${tgShow(t,sf.v)}<div class="how">${sf.n} month${sf.n===1?"":"s"}</div>`:"–"}</td>
+    h+=`<tr><td>${esc(t.label)}<div class="how">${esc(t.how)}</div></td><td class="n">${t.kind==="event"?'<span class="muted">see dashboard</span>':sf?`${tgShow(t,sf.v)}<div class="how">${sf.member?"from Insightly":`${sf.n} month${sf.n===1?"":"s"}`}</div>`:"–"}</td>
       <td class="n"><label class="tin">${pre?`<span>${pre}</span>`:""}<input data-i="${i}" inputmode="decimal" aria-label="${esc(t.label)} target for ${tgYear}" value="${esc(tgIn(t,cur?Number(cur.target):null))}" data-orig="${esc(tgIn(t,cur?Number(cur.target):null))}">${suf?`<span>${suf}</span>`:""}</label></td></tr>`;
   });
   $("tgForm").innerHTML=h+"</tbody>";

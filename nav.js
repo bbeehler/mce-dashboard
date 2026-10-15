@@ -5,6 +5,7 @@
 (function () {
   var PAGES = [
     { id: "dashboard", label: "Executive Dashboard", href: "https://bbeehler.github.io/mce-dashboard/" },
+    { id: "membership", label: "Membership",         href: "https://bbeehler.github.io/mce-dashboard/membership.html" },
     { id: "eblast",    label: "eBlast Calendar",     href: "https://bbeehler.github.io/eblast-calendar/" },
     // { id: "new-page", label: "New page", href: "https://bbeehler.github.io/new-page/" },
     { id: "upload",    label: "Upload data",         href: "https://bbeehler.github.io/mce-dashboard/upload.html", side: "end" }
