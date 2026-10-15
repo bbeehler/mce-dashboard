@@ -259,6 +259,19 @@ footer p{margin:0}
 .seg button+button{border-left:1px solid rgba(255,255,255,.25)}
 .seg button[aria-pressed="true"]{background:#fff;color:var(--brand);font-weight:600}
 .stream{display:grid;gap:12px}
+/* Jump-to bar: sticks to the top while scrolling */
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+#kpis,#targets,.stream,#social,#sentCard{scroll-margin-top:60px}
+.jump{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--page) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--grid)}
+.jump .wrap{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding-block:6px}
+.jump .wrap::-webkit-scrollbar{display:none}
+.jump .jl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:8px;white-space:nowrap}
+.jump a{font-size:13px;color:var(--ink-2);text-decoration:none;padding:6px 10px;border-radius:999px;white-space:nowrap}
+.jump a:hover{background:var(--wash);color:var(--ink)}
+.jump a[aria-current="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+.jump .totop{margin-left:auto;color:var(--muted)}
+@media (max-width:560px){.jump .jl{display:none}}
 .ml{display:grid;gap:4px}
 .ml h4{margin:10px 0 0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .ml h4 .sub{font-size:12px}
@@ -278,7 +291,7 @@ footer p{margin:0}
 .muted{color:var(--muted)}
 </style>
 </head>
-<body>
+<body id="top">
 <script src="nav.js" data-current="dashboard"></script>
 <header class="band">
   <div class="wrap">
@@ -296,12 +309,15 @@ footer p{margin:0}
   </div>
 </header>
 
+<nav class="jump" id="jump" aria-label="Jump to a section"><div class="wrap"><span class="jl">Jump to</span>
+  <a href="#kpis">Headlines</a><a href="#targets">Targets</a><a href="#marketing">Website</a><a href="#communications">Email</a><a href="#social">Social</a><a href="#sentCard">Sentiment</a><a href="#engagement">Events</a><a href="#membership">Membership</a>
+  <a href="#top" class="totop" aria-label="Back to top">↑ Top</a></div></nav>
 <main class="wrap" id="main">
   <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
-  <section class="card targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
+  <section class="card targets" id="targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
 
-  <section class="stream" aria-labelledby="mkH">
+  <section class="stream" id="marketing" aria-labelledby="mkH">
     <div class="sec-head"><h2 id="mkH">Marketing</h2><span class="sub-h">Website, from GA4 · all sites combined</span></div>
     <div class="cols">
       <div class="card"><h3>Website sessions and engaged sessions <span class="sub">· last 13 months</span></h3><div id="webChart"></div><div class="legend" id="webLegend"></div><p class="note" id="webNote"></p></div>
@@ -310,7 +326,7 @@ footer p{margin:0}
     <div class="card"><h3><span id="webTblH">Website this month</span> <span class="sub" id="webTblSub"></span></h3><div class="tiles" id="webGrid"></div><p class="note" id="webGridNote"></p><details class="tv"><summary>Show as a table</summary><div class="tblwrap"><table class="mini" id="webTable"></table></div></details></div>
   </section>
 
-  <section class="stream" aria-labelledby="cmH">
+  <section class="stream" id="communications" aria-labelledby="cmH">
     <div class="sec-head"><h2 id="cmH">Communications</h2><span class="sub-h">Email from Insightly, social from your scheduling tool · all brands combined</span></div>
     <div class="cols">
       <div class="card"><h3>Broad emails to the main member list <span class="sub">· per month</span></h3><div id="loadChart"></div>
@@ -319,7 +335,7 @@ footer p{margin:0}
     </div>
     <div class="card"><h3>Email fatigue: opt-outs per broad send <span class="sub">· main member list, last 13 months</span></h3><div class="fat"><div id="fatChart"></div><div id="fatNote" class="fatnote"></div></div><div class="legend" id="fatLegend"></div></div>
     <div class="card"><h3><span id="emailH">Email this month</span> <span class="sub" id="emailSub"></span></h3><div class="tiles" id="emailGrid"></div><p class="note" id="emailGridNote"></p><details class="tv"><summary>Show as a table</summary><div class="tblwrap"><table class="mini" id="emailTable"></table></div></details></div>
-    <div class="card"><h3>Social media <span class="sub" id="socialSub"></span></h3>
+    <div class="card" id="social"><h3>Social media <span class="sub" id="socialSub"></span></h3>
       <div class="mseg" id="socMetric" role="group" aria-label="Social measure"></div>
       <div class="cols soc-top">
         <div><h4>All platforms together <span class="sub" id="socAllSub"></span></h4><div id="socAll"></div></div>
@@ -336,13 +352,13 @@ footer p{margin:0}
     <div class="card"><h3>Send plan, next 8 weeks <span class="sub">· live from the eBlast calendar</span></h3><div id="discChart"></div><p class="note" id="discNote"></p></div>
   </section>
 
-  <section class="stream" aria-labelledby="enH">
+  <section class="stream" id="engagement" aria-labelledby="enH">
     <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
     <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
   </section>
 
-  <section class="stream" aria-labelledby="mbH">
+  <section class="stream" id="membership" aria-labelledby="mbH">
     <div class="sec-head"><h2 id="mbH">Membership</h2><span class="sub-h"><span id="mbLive">Live from Insightly</span> · <a href="membership.html">Open the Membership page →</a></span></div>
     <div class="card"><h3>Membership now <span class="sub" id="mbSub"></span></h3><div class="tiles" id="mbTiles"></div></div>
     <div class="card"><h3>Marketing activity and member payments, month by month <span class="sub" id="mlSub"></span></h3>
@@ -1025,6 +1041,18 @@ function renderMembership(){
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
 function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership()}
+function watchJump(){
+  // Highlight the last section whose top has scrolled past the jump bar.
+  const links=[...document.querySelectorAll("#jump a:not(.totop)")];
+  const targets=links.map(a=>[a,document.getElementById(a.getAttribute("href").slice(1))]).filter(x=>x[1]);
+  let ticking=false,cur=null;
+  const update=()=>{ticking=false;let on=null;
+    for(const [a,el] of targets)if(el.getBoundingClientRect().top<=90)on=a;
+    if(innerHeight+scrollY>=document.documentElement.scrollHeight-4)on=targets[targets.length-1][0];
+    if(on===cur)return;cur=on;links.forEach(a=>a.removeAttribute("aria-current"));
+    if(on){on.setAttribute("aria-current","true");const bar=on.parentElement,l=on.offsetLeft,r=l+on.offsetWidth;if(l<bar.scrollLeft||r>bar.scrollLeft+bar.clientWidth)bar.scrollLeft=l-16}};
+  addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(update)}},{passive:true});update();
+}
 function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view==="ytd")u.searchParams.set("view","ytd");else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
@@ -1053,7 +1081,7 @@ async function boot(){
   if(q.get("view")==="ytd")state.view="ytd";
   $("vMonth").onclick=()=>{state.view="month";setURL();render()};
   $("vYtd").onclick=()=>{state.view="ytd";setURL();render()};
-  render();
+  render();watchJump();
   let askReady=false;const dlg=$("askDlg");askReadyReset=()=>{askReady=false};
   $("askOpen").onclick=async()=>{dlg.showModal();if(!askReady){askReady=true;await renderAsk()}setTimeout(()=>($("askQ")||$("askCode"))?.focus(),50)};
   $("askClose").onclick=()=>dlg.close();
