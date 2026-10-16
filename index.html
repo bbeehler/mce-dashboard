@@ -244,6 +244,11 @@ html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;paddin
 .notes-strip .nt{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:6px 10px;display:inline-flex;gap:8px;align-items:baseline}
 .notes-strip .nt i{width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none;align-self:center}
 .notes-strip .nt small{color:var(--muted)}
+.brief{border-left:4px solid var(--red)}
+.brief h3 .sub{font-weight:400}
+#briefBody{font-size:14.5px;line-height:1.55;max-width:860px}
+#briefBody h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:14px 0 4px}
+#briefBody ul{margin:4px 0 8px;padding-left:20px}#briefBody li{margin:0 0 4px}#briefBody p{margin:0 0 8px}
 .spons{display:grid;gap:10px}
 .sp-row{display:grid;grid-template-columns:minmax(150px,26%) 1fr 92px 70px;gap:12px;align-items:center;font-size:13px}
 .sp-row .nm b{display:block;color:var(--ink)}.sp-row .nm small{color:var(--muted);font-size:11.5px}
@@ -334,6 +339,7 @@ html{scroll-behavior:smooth}
   <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
   <div class="notes-strip" id="monthNotes" hidden></div>
+  <section class="card brief" id="briefBox" hidden aria-labelledby="briefH"><h3 id="briefH"></h3><div id="briefBody"></div><p class="note" id="briefNote"></p></section>
   <section class="card targets" id="targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
 
   <section class="stream" id="marketing" aria-labelledby="mkH">
@@ -1078,6 +1084,18 @@ function renderMembership(){
 const NOTE_STREAMS={all:"All charts",marketing:"Website",communications:"Email & social",engagement:"Events",membership:"Membership"};
 function noteFor(p,stream){const t=(D.notes||[]).filter(x=>x.period===p&&(x.topic==="chart:all"||x.topic==="chart:"+stream)).map(x=>x.note);return t.length?t.join(" · "):null}
 const notesFor=(months,stream)=>months.map(p=>noteFor(p,stream));
+function briefMd(t){const e=x=>esc(x).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");let out="",list=false;
+  for(const raw of String(t||"").split(/\n/)){const l=raw.trim(),b=l.match(/^[-*•]\s+(.*)$/);
+    if(b){if(!list){out+="<ul>";list=true}out+=`<li>${e(b[1])}</li>`;continue}if(list){out+="</ul>";list=false}if(!l)continue;
+    const h=l.match(/^#{1,3}\s+(.*)$/);out+=h?`<h4>${e(h[1])}</h4>`:`<p>${e(l)}</p>`}
+  return out+(list?"</ul>":"")}
+// The approved monthly brief for the selected month (month view only).
+function renderBrief(){
+  const b=!YTD&&(D.briefs||[]).find(x=>x.period===state.month);$("briefBox").hidden=!b;if(!b)return;
+  $("briefH").innerHTML=`Monthly brief <span class="sub">· ${esc(mLabel(b.period,{month:"long",year:"numeric"}))}</span>`;
+  $("briefBody").innerHTML=briefMd(b.body_md);
+  $("briefNote").textContent=`Sent ${new Date(b.approved_at).toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}. Written with Claude from this dashboard's data and reviewed by Brian Beehler.`;
+}
 function renderMonthNotes(){
   const p=state.month,ms=YTD?ytdMonths(p):[p];
   const list=(D.notes||[]).filter(x=>x.topic.startsWith("chart:")&&ms.includes(x.period)).sort((a,b)=>a.period.localeCompare(b.period));
@@ -1114,7 +1132,7 @@ function renderSponsorship(){
 
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes()}
+function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes();renderBrief()}
 function watchJump(){
   // Highlight the last section whose top has scrolled past the jump bar.
   const links=[...document.querySelectorAll("#jump a:not(.totop)")];
@@ -1134,6 +1152,7 @@ async function boot(){
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{D.spons=await rest("sponsorship_totals","select=year,program,level,deals,invoiced,paid_deals,paid")}catch(e){D.spons=[]}
+    try{D.briefs=await rest("briefs","select=period,subject,body_md,approved_at&order=period.desc")}catch(e){D.briefs=[]}
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
     try{const last=await rest("member_snap","select=as_of,year&order=as_of.desc&limit=1");
       if(last.length){const [snap,monthly]=await Promise.all([rest("member_snap",`select=metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`),rest("member_monthly","select=period,metric,value&order=period")]);

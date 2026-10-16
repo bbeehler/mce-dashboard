@@ -32,6 +32,7 @@ input[type=email],input[type=month],select{font:inherit;padding:8px 10px;border:
 input[type=file]{font:inherit}
 button,.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
 button.ghost,.btn.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
 button[disabled]{opacity:.5;cursor:not-allowed}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -64,6 +65,15 @@ td.n{text-align:right}
 .sn-grid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2)}
 .sn-grid .tin input{width:100%}
 .sn-score{display:flex;flex-direction:column;gap:2px;padding-left:8px}.sn-score b{font-size:26px;line-height:1.1}
+.br-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:8px 0 6px}
+@media (max-width:760px){.br-grid{grid-template-columns:1fr}}
+.br-in{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:6px;padding:8px 10px}
+#brBody{font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.br-prev{border:1px solid var(--grid);border-radius:8px;padding:12px 14px;background:var(--surface);font-size:14px;line-height:1.5;max-height:460px;overflow:auto}
+.br-prev .br-subj{font-weight:700;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid var(--red,#e31b4b)}
+.br-prev h4{margin:12px 0 4px;font-size:14px}.br-prev ul{margin:4px 0 10px;padding-left:20px}.br-prev p{margin:0 0 10px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--grid);color:var(--ink-2)}
+.pill.ok{background:color-mix(in srgb,#0ca30c 15%,transparent);color:#0a7a0a}.pill.warn{background:color-mix(in srgb,#fab219 22%,transparent);color:#8a5a00}
 .sn-note{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2);margin-bottom:10px}
 .sn-note textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:6px;padding:8px 10px;resize:vertical}
 @media (max-width:560px){.sn-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sn-score{grid-column:1/-1;padding-left:0}}
@@ -165,6 +175,21 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div class="tbl" style="margin-top:12px"><table id="ntList"></table></div>
   </section>
 
+  <section class="card" id="briefCard" hidden>
+    <h2>8. Monthly brief</h2>
+    <p>When you save a month's numbers, Claude writes a short brief for Emily from everything on the dashboard. The draft is emailed to you. Read it here, edit anything, then <b>Approve &amp; send</b> to email it to Emily from your Outlook. The approved brief also appears at the top of the dashboard for that month.</p>
+    <div class="row"><label for="brMonth">Month</label><select id="brMonth"></select><span id="brStatus"></span></div>
+    <div class="br-grid">
+      <div>
+        <label class="sn-note">Subject<input id="brSubject" maxlength="150" class="br-in"></label>
+        <label class="sn-note">Brief <span class="muted">(## for headings, - for bullets, **bold**)</span><textarea id="brBody" rows="16" maxlength="6000"></textarea></label>
+      </div>
+      <div><div class="muted" style="font-size:12px;margin-bottom:4px">Preview</div><div class="br-prev" id="brPrev"><p class="muted">No brief for this month yet.</p></div></div>
+    </div>
+    <div class="row"><button id="brGen" type="button" class="ghost">Write brief with Claude</button><button id="brSave" type="button" class="ghost">Save changes</button><button id="brApprove" type="button">Approve &amp; send to Emily</button><span class="muted" id="brHint"></span></div>
+    <div id="brMsg"></div>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -217,7 +242,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;$("briefCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes();loadBrief()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -323,7 +348,8 @@ $("save").onclick=async()=>{
     const metrics=parsed.metrics.map(({_label,_tab,brand,...m})=>m);
     const targets=parsed.targets.map(({_label,_unit,...t})=>t);
     const r=await call("save",{period,metrics,events:parsed.events,targets,filename:parsed.filename});existing=null;
-    msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them.`);
+    msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them. Claude is now writing the ${monthLabel(period)} brief; it will appear under <a href="#briefCard">Monthly brief</a> in about a minute.`);
+    generateBrief(period,true);
     loadHistory();
   }catch(err){
     if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}
@@ -500,6 +526,54 @@ $("ntSave").onclick=()=>{if(!$("ntMonth").value){msg("ntMsg","err","Choose the m
   const t=$("ntText").value.trim(),period=$("ntMonth").value+"-01",stream=$("ntStream").value;
   if(!t&&!ntRows.find(n=>n.period===period&&n.topic==="chart:"+stream)){msg("ntMsg","err","Write a note first.");return}
   ntSend(period,stream,t||null)};
+
+/* ---------- monthly brief ---------- */
+const ASK_FN="https://cyeirmvdstdhcbuyghvv.supabase.co/functions/v1/mce-ask";
+async function brCall(action,extra={}){
+  const r=await fetch(ASK_FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,passcode,...extra})});
+  const j=await r.json().catch(()=>({error:"The brief service didn't answer properly."}));
+  if(!r.ok||j.error)throw Object.assign(new Error(j.error||`Error ${r.status}`),{status:r.status});
+  return j;
+}
+let brCur=null,brBusy=false;
+function brMd(t){const e=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");let out="",list=false;
+  for(const raw of String(t||"").split(/\n/)){const l=raw.trim(),b=l.match(/^[-*•]\s+(.*)$/);
+    if(b){if(!list){out+="<ul>";list=true}out+=`<li>${e(b[1])}</li>`;continue}if(list){out+="</ul>";list=false}if(!l)continue;
+    const h=l.match(/^#{1,3}\s+(.*)$/);out+=h?`<h4>${e(h[1])}</h4>`:`<p>${e(l)}</p>`}
+  return out+(list?"</ul>":"")}
+function brPreview(){$("brPrev").innerHTML=$("brBody").value.trim()?`<div class="br-subj">${esc($("brSubject").value)}</div>`+brMd($("brBody").value):'<p class="muted">No brief for this month yet. Use <b>Write brief with Claude</b>.</p>';brDirty()}
+function brDirty(){const ch=brCur&&($("brSubject").value!==brCur.subject||$("brBody").value!==brCur.body_md);$("brSave").disabled=brBusy||!brCur||!ch;$("brApprove").disabled=brBusy||!brCur||!$("brBody").value.trim();$("brGen").disabled=brBusy;
+  $("brHint").textContent=ch?"Changes not saved yet.":"";$("brApprove").textContent=brCur&&brCur.status==="approved"?(ch?"Send updated brief to Emily":"Send again to Emily"):"Approve & send to Emily"}
+function brShowStatus(){const b=brCur;$("brStatus").innerHTML=!b?'<span class="pill">No brief yet</span>':b.status==="approved"?`<span class="pill ok">Approved ${new Date(b.approved_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>`:`<span class="pill warn">Draft v${b.version} · written ${new Date(b.generated_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>`}
+async function loadBrief(period){
+  let r;try{r=await brCall("brief_get",period?{period}:{})}catch(e){msg("brMsg","err",`The brief couldn't be loaded: ${esc(e.message)}`);return}
+  // Month list: months with a brief, plus the latest uploaded months.
+  let ups=[];try{ups=[...new Set((await loadExisting()).map(x=>x.period))]}catch(e){}
+  const ms=[...new Set([...(r.list||[]).map(x=>x.period),...ups])].sort().reverse().slice(0,18);
+  const want=period||r.brief?.period||ms[0];
+  $("brMonth").innerHTML=ms.map(m=>{const b=(r.list||[]).find(x=>x.period===m);return `<option value="${m}">${monthLabel(m)}${b?(b.status==="approved"?" · approved":" · draft"):""}</option>`}).join("");
+  if(want)$("brMonth").value=want;
+  brCur=r.brief&&r.brief.period===want?r.brief:null;
+  $("brSubject").value=brCur?brCur.subject:"";$("brBody").value=brCur?brCur.body_md:"";brShowStatus();brPreview();
+}
+async function generateBrief(period,auto){
+  brBusy=true;brDirty();msg("brMsg","warn",`Claude is writing the ${monthLabel(period)} brief from the dashboard data. This takes about a minute…`);
+  try{await brCall("brief_generate",{period});await loadBrief(period);msg("brMsg","ok",`Draft ready for ${monthLabel(period)}. It has also been emailed to you for review. Edit anything here, then approve to send it to Emily.`)}
+  catch(e){if(e.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("brMsg","err",`The brief wasn't written: ${esc(e.message)}${auto?" You can try again with <b>Write brief with Claude</b>.":""}`)}
+  brBusy=false;brDirty();
+}
+$("brMonth").addEventListener("change",()=>{msg("brMsg","","");loadBrief($("brMonth").value)});
+$("brSubject").addEventListener("input",brPreview);$("brBody").addEventListener("input",brPreview);
+$("brGen").onclick=()=>{const p=$("brMonth").value;if(!p)return;if(brCur&&!confirm(`Replace the ${monthLabel(p)} brief with a new draft from Claude? Your edits to the current one will be lost.`))return;generateBrief(p,false)};
+async function brStore(action){
+  const p=$("brMonth").value;brBusy=true;brDirty();msg("brMsg","warn","Saving…");
+  try{await brCall(action,{period:p,subject:$("brSubject").value.trim(),body_md:$("brBody").value.trim()});await loadBrief(p);
+    msg("brMsg","ok",action==="brief_approve"?`Approved. Your Outlook flow will email the ${monthLabel(p)} brief to Emily within the hour, and it now shows on the dashboard.`:"Changes saved.")}
+  catch(e){if(e.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("brMsg","err",`Not saved: ${esc(e.message)}`)}
+  brBusy=false;brDirty();
+}
+$("brSave").onclick=()=>brStore("brief_save");
+$("brApprove").onclick=()=>{const p=$("brMonth").value;if(confirm(`Send the ${monthLabel(p)} brief to Emily?`))brStore("brief_approve")};
 
 async function loadHistory(){
   let data;try{data=(await call("history")).uploads}catch(e){$("history").textContent="Upload history isn't available right now.";return}

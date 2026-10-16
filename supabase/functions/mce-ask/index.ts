@@ -4,6 +4,12 @@
 //   POST {action:"check", passcode}                          -> {ok:true} if the passcode is right
 //   POST {action:"ask", passcode, question, month, view, history:[{q,a}]}
 //
+// Monthly brief (upload passcode, MCE_UPLOAD_PASSCODE):
+//   POST {action:"brief_generate", passcode, period}               -> Claude writes a draft brief for the month
+//   POST {action:"brief_get", passcode, period?}                    -> the brief (draft or approved) and the list of months
+//   POST {action:"brief_save", passcode, period, subject, body_md}  -> save edits to the draft
+//   POST {action:"brief_approve", passcode, period, subject, body_md} -> approve; the approved feed then emails Emily
+//
 // Secrets: ANTHROPIC_API_KEY (Claude API) and MCE_ASK_PASSCODE (the question box passcode).
 // The function reads the dashboard tables with the service role, builds a compact data brief,
 // and sends it with the question to Claude. Every question is logged in ask_log (question,
@@ -38,6 +44,52 @@ async function passcodeOk(given: unknown) {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+
+async function uploadOk(given: unknown) {
+  const real = Deno.env.get("MCE_UPLOAD_PASSCODE");
+  if (!real || typeof given !== "string" || !given) return false;
+  const [a, b] = await Promise.all([sha(given), sha(real)]);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+const isPeriod = (p: unknown) => typeof p === "string" && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(p);
+const monthName = (p: string) => new Date(p + "T12:00:00Z").toLocaleDateString("en-CA", { month: "long", year: "numeric", timeZone: "UTC" });
+
+const BRIEF_SYSTEM = `You write the monthly MCE brief for AIA Canada (Automotive Industries Association of Canada; brands AIA Canada, CCIF, YPA, I-CAR Canada). The reader is the President & CEO, Emily Chung; the sender is Brian Beehler, Director of Digital Marketing, Communications and Engagement. It is read in an email in under two minutes.
+
+Write in exactly this format (Markdown), nothing before or after:
+Subject: <MCE brief, Month YYYY: a short phrase naming the main story, under 70 characters in total>
+
+<One or two sentences: the overall story of the month.>
+
+## What moved
+- <3 to 5 bullets. Each one sentence with the number and its comparison: previous month, same month last year, or target pace.>
+
+## Watch
+- <1 to 3 bullets: risks or things going the wrong way, with numbers.>
+
+## Next month
+- <1 to 3 bullets: concrete actions or decisions the team proposes.>
+
+Rules:
+- Use only the data given. Never invent numbers. If an important source isn't uploaded for the month, say so in Watch.
+- Compare like with like: when you compare two months, use exactly the same measure for both. For email, use the open rate, click rate and opt-outs per broad send from the derived monthly measures table (all email), and only mention a main-list rate if you give it for both months.
+- Before writing each number, check it against the tables; round percentages to one decimal.
+- Cover the month asked about; use year to date only where it explains progress against yearly targets.
+- Use the team's chart notes and the sentiment notes for context on spikes and dips.
+- Membership and sponsorship come live from Insightly; events from PheedLoop.
+- Plain language, Canadian spelling, no jargon, no headings other than the three above, 170 to 260 words in total. Bold at most one number per bullet.`;
+
+async function claude(key: string, system: string, messages: any[]) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: MODEL, max_tokens: 8000, output_config: { effort: "medium" }, system, messages }),
+  });
+  const j = await r.json().catch(() => ({}));
+  return { r, j, text: (j.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim() };
 }
 
 async function all(table: string, select: string, filter?: (q: any) => any) {
@@ -189,6 +241,58 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "The request wasn't readable." }, 400, h); }
 
   const key = Deno.env.get("ANTHROPIC_API_KEY");
+
+  // ---------- monthly brief (upload passcode) ----------
+  if (typeof body.action === "string" && body.action.startsWith("brief_")) {
+    if (!(await uploadOk(body.passcode))) { await new Promise((r) => setTimeout(r, 800)); return json({ error: "That passcode isn't right." }, 401, h); }
+    const { period } = body;
+    if (body.action === "brief_get") {
+      const { data: list } = await db.from("briefs").select("period,status,subject,generated_at,approved_at").order("period", { ascending: false }).limit(24);
+      const want = isPeriod(period) ? period : list?.[0]?.period;
+      const { data: brief } = want ? await db.from("briefs").select("*").eq("period", want).maybeSingle() : { data: null };
+      return json({ list: list ?? [], brief }, 200, h);
+    }
+    if (!isPeriod(period)) return json({ error: "Choose the month." }, 400, h);
+    if (body.action === "brief_save" || body.action === "brief_approve") {
+      const subject = typeof body.subject === "string" ? body.subject.trim() : "", text = typeof body.body_md === "string" ? body.body_md.trim() : "";
+      if (!subject || subject.length > 150 || !text || text.length > 6000) return json({ error: "The subject or text is empty or too long." }, 400, h);
+      const now = new Date().toISOString();
+      const upd: Record<string, unknown> = { subject, body_md: text, edited_at: now };
+      if (body.action === "brief_approve") Object.assign(upd, { status: "approved", approved_at: now });
+      const { data, error } = await db.from("briefs").update(upd).eq("period", period).select("period,status,approved_at").maybeSingle();
+      if (error) return json({ error: `Saving the brief failed: ${error.message}` }, 500, h);
+      if (!data) return json({ error: "There's no brief for that month yet. Write one first." }, 404, h);
+      return json({ ok: true, brief: data }, 200, h);
+    }
+    if (body.action === "brief_generate") {
+      if (!key) return json({ error: "The Claude API key isn't set up (ANTHROPIC_API_KEY)." }, 503, h);
+      const { count } = await db.from("ask_log").select("id", { count: "exact", head: true }).gte("asked_at", new Date(Date.now() - 864e5).toISOString());
+      if ((count ?? 0) >= DAILY_CAP) return json({ error: "The daily limit for Claude has been reached. Try again tomorrow." }, 429, h);
+      const log: Record<string, unknown> = { question: `[monthly brief] ${period.slice(0, 7)}` };
+      try {
+        const brief = await buildBrief();
+        const { r, j, text } = await claude(key, BRIEF_SYSTEM, [{ role: "user", content: `<data>\n${brief}\n</data>\n\nToday is ${new Date().toISOString().slice(0, 10)}. Write the brief for ${monthName(period)} (month ${period.slice(0, 7)}).` }]);
+        const inTok = (j.usage?.input_tokens ?? 0) + (j.usage?.cache_read_input_tokens ?? 0) + (j.usage?.cache_creation_input_tokens ?? 0);
+        Object.assign(log, { ok: r.ok && !!text, input_tokens: inTok || null, output_tokens: j.usage?.output_tokens ?? null, note: r.ok ? (text ? null : "empty brief") : String(j?.error?.message ?? r.status).slice(0, 300) });
+        await db.from("ask_log").insert(log);
+        if (!r.ok || !text) return json({ error: r.ok ? "Claude didn't return a brief. Try again." : `Claude couldn't write the brief (${String(j?.error?.message ?? r.status).slice(0, 160)}).` }, 502, h);
+        const m = text.match(/^\s*Subject:\s*(.+)$/im);
+        const subject = (m ? m[1] : `MCE brief, ${monthName(period)}`).trim().slice(0, 150);
+        const body_md = (m ? text.replace(m[0], "") : text).trim();
+        const { data: old } = await db.from("briefs").select("version").eq("period", period).maybeSingle();
+        const row = { period, status: "draft", subject, body_md, generated_at: new Date().toISOString(), edited_at: null, approved_at: null, version: (old?.version ?? 0) + 1, input_tokens: inTok || null, output_tokens: j.usage?.output_tokens ?? null };
+        const { error } = await db.from("briefs").upsert(row, { onConflict: "period" });
+        if (error) return json({ error: `Saving the brief failed: ${error.message}` }, 500, h);
+        return json({ ok: true, brief: row }, 200, h);
+      } catch (err) {
+        Object.assign(log, { ok: false, note: String((err as Error).message ?? err).slice(0, 300) });
+        await db.from("ask_log").insert(log);
+        return json({ error: "Something went wrong preparing the data. Try again in a minute." }, 500, h);
+      }
+    }
+    return json({ error: "Unknown action." }, 400, h);
+  }
+
   if (body.action === "status") return json({ ready: !!key && !!Deno.env.get("MCE_ASK_PASSCODE"), key: !!key, passcode: !!Deno.env.get("MCE_ASK_PASSCODE") }, 200, h);
   if (!key || !Deno.env.get("MCE_ASK_PASSCODE")) return json({ error: "Questions aren't switched on yet (a Supabase secret is missing)." }, 503, h);
 
