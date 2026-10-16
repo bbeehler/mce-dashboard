@@ -123,6 +123,7 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <h2>4. Yearly targets</h2>
     <p>Set the goals the dashboard measures progress against. Leave a box empty for no target. “So far” is this year's actual, to help you pick a realistic number.</p>
     <div class="row" role="group" aria-label="Target year"><span class="muted">Year</span><span class="seg" id="tgYears"></span></div>
+    <p class="muted" id="tgPlan" hidden></p>
     <div class="tbl tgt"><table id="tgForm"></table></div>
     <div class="row"><button id="tgSave" type="button">Save targets</button><span class="muted" id="tgHint"></span></div>
     <div id="tgMsg"></div>
@@ -353,7 +354,8 @@ const TG=[
  ["Membership","membership","insightly_members","new","","higher","n","New members","Members who joined during the year","member:new"],
  ["Membership","membership","insightly_members","dues","","higher","money","Membership dues","Dues before tax for the year","member:dues"],
 ].map(([group,stream,source,metric,dimension,better,unit,label,how,kind])=>({group,stream,source,metric,dimension,better,unit,label,how,kind}));
-let tgYear=new Date().getFullYear(),tgSaved=[],MEM=[],SPONS=[];
+// From October on, the targets being set are next year's, so the page opens on next year.
+let tgYear=new Date().getFullYear()+(new Date().getMonth()>=9?1:0),tgSaved=[],MEM=[],SPONS=[];
 const tgKey=t=>`${t.stream}|${t.source}|${t.metric}|${t.dimension}`;
 const tgShow=(t,v)=>v==null?"–":t.unit==="pct"?(v*100).toFixed(1)+"%":t.unit==="dec"?v.toFixed(1):t.unit==="money"?"$"+fmt(Math.round(v)):fmt(Math.round(v));
 const tgIn=(t,v)=>v==null?"":t.unit==="pct"?+(v*100).toFixed(2)+"":t.unit==="dec"?+v.toFixed(2)+"":String(Math.round(v));
@@ -378,9 +380,11 @@ async function loadTargets(){
   let rows=[];try{rows=await loadExisting()}catch(e){}
   try{SPONS=await sbGet("sponsorship_totals?select=year,invoiced")}catch(e){SPONS=[]}
   try{const last=await sbGet("member_snap?select=as_of&order=as_of.desc&limit=1");MEM=last.length?await sbGet(`member_snap?select=year,metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`):[]}catch(e){MEM=[]}
-  let grp="",h=`<thead><tr><th>Measure</th><th style="text-align:right">${tgYear} so far</th><th style="text-align:right">${tgYear} target</th></tr></thead><tbody>`;
+  const bY=Math.min(tgYear,y0);  // planning a future year: show this year's results as the starting point
+  $("tgPlan").hidden=tgYear<=y0;$("tgPlan").textContent=`Setting targets for ${tgYear}. The middle column shows ${y0} so far as a starting point.`;
+  let grp="",h=`<thead><tr><th>Measure</th><th style="text-align:right">${bY} so far</th><th style="text-align:right">${tgYear} target</th></tr></thead><tbody>`;
   TG.forEach((t,i)=>{
-    const cur=tgSaved.find(x=>tgKey({...x,dimension:x.dimension||""})===tgKey(t)),sf=soFar(t,rows,tgYear);
+    const cur=tgSaved.find(x=>tgKey({...x,dimension:x.dimension||""})===tgKey(t)),sf=soFar(t,rows,bY);
     if(t.group!==grp){grp=t.group;h+=`<tr class="grp"><td colspan="3">${grp}</td></tr>`}
     const pre=t.unit==="money"?"$":t.better==="lower"?"≤":"",suf=t.unit==="pct"?"%":"";
     h+=`<tr><td>${esc(t.label)}<div class="how">${esc(t.how)}</div></td><td class="n">${t.kind==="event"?'<span class="muted">see dashboard</span>':sf?`${tgShow(t,sf.v)}<div class="how">${sf.member?"from Insightly":`${sf.n} month${sf.n===1?"":"s"}`}</div>`:"–"}</td>
