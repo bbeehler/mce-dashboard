@@ -6,6 +6,7 @@
 //   POST {action:"targets", passcode, year, targets}        -> set or clear yearly targets
 //   POST {action:"attendance", passcode, items:[{code, attendance}]} -> set or clear event attendance
 //   POST {action:"sentiment", passcode, period, positive, neutral, negative, note} -> monthly sentiment
+//   POST {action:"note", passcode, period, topic:"chart:<stream>", note|null}       -> note shown on the dashboard charts
 //
 // The passcode lives only in the MCE_UPLOAD_PASSCODE secret. Writes use the service role,
 // so the public site never holds a key that can change data.
@@ -121,6 +122,19 @@ Deno.serve(async (req) => {
       ? await db.from("month_notes").upsert({ period, topic: "sentiment", note: text, updated_at: new Date().toISOString() }, { onConflict: "period,topic" })
       : await db.from("month_notes").delete().eq("period", period).eq("topic", "sentiment");
     if (ne) return json({ error: `Saving the themes note failed: ${ne.message}` }, 500, h);
+    return json({ ok: true }, 200, h);
+  }
+
+  // Chart notes: {period, topic:"chart:<stream>", note|null}. Shown as markers on the dashboard charts; null removes it.
+  if (body.action === "note") {
+    const { period, topic, note } = body;
+    if (!isPeriod(period)) return json({ error: "Choose the month." }, 400, h);
+    if (!["chart:all", "chart:marketing", "chart:communications", "chart:engagement", "chart:membership"].includes(topic)) return json({ error: "Choose which charts the note shows on." }, 400, h);
+    if (note != null && (typeof note !== "string" || !note.trim() || note.length > 200)) return json({ error: "Keep the note under 200 characters." }, 400, h);
+    const { error } = note
+      ? await db.from("month_notes").upsert({ period, topic, note: note.trim(), updated_at: new Date().toISOString() }, { onConflict: "period,topic" })
+      : await db.from("month_notes").delete().eq("period", period).eq("topic", topic);
+    if (error) return json({ error: `Saving the note failed: ${error.message}` }, 500, h);
     return json({ ok: true }, 200, h);
   }
 

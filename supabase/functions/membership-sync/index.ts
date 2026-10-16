@@ -10,6 +10,10 @@
 //   renewal rate          = renewed / (renewed + not renewed)   (lifetime members left out)
 // Insightly keeps only the latest payment per organisation, so payment months are refreshed only for the current
 // renewal cycle (from October of last year); earlier months are left as they were saved.
+//
+// The same run also totals Insightly "Sponsorship" records (custom object Sponsorship__c) by sponsorship year,
+// sponsored program and level into sponsorship_totals: number of sponsorships, amount invoiced, and the part
+// with an invoice paid date. Sponsor names are not stored.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const BASE = "https://api.na1.insightly.com/v3.1";
@@ -120,7 +124,37 @@ Deno.serve(async (req) => {
     await db.from("member_monthly").delete().in("metric", ["joined", "resigned"]);
     if (mrows.length) { const { error: e2 } = await db.from("member_monthly").upsert(mrows, { onConflict: "period,metric" }); if (e2) throw new Error(`member_monthly: ${e2.message}`); }
 
-    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: orgs.length, events_written: g("members"), note: `${g("members")} members for ${Y}` });
+    // ---- Sponsorships ----
+    let spons = 0;
+    try {
+      const defs = await (await fetch(`${BASE}/CustomFields/Sponsorship__c`, { headers: { Authorization: auth } })).json();
+      const fid = (...labels: string[]) => { for (const l of labels) { const d = (defs ?? []).find((x: any) => String(x.FIELD_LABEL).toLowerCase() === l.toLowerCase()); if (d) return d.FIELD_NAME as string; } return ""; };
+      const F = { amt: fid("Amount Invoiced"), prog: fid("Sponsored Program"), lvl: fid("Sponsorship Level"), lvl2: fid("Level"), yr: fid("Sponsorship Year"), paid: fid("Invoice Paid Date") };
+      const recs: any[] = [];
+      for (let skip = 0; skip < 20000; skip += 500) {
+        const r = await fetch(`${BASE}/Sponsorship__c?top=500&skip=${skip}`, { headers: { Authorization: auth } });
+        if (!r.ok) throw new Error(`Sponsorship ${r.status}`);
+        const b = await r.json(); recs.push(...b); if (b.length < 500) break;
+      }
+      const T: Record<string, { deals: number; invoiced: number; paid_deals: number; paid: number }> = {};
+      for (const o of recs) {
+        const yr = Math.trunc(num(cf(o, F.yr))); if (!yr) continue;
+        let prog = cf(o, F.prog) || "Not recorded"; if (/autocare industry conference/i.test(prog)) prog = "CAIC";
+        const lvl = (cf(o, F.lvl) || cf(o, F.lvl2) || "Not recorded").slice(0, 60);
+        const amt = num(cf(o, F.amt)), isPaid = !!cf(o, F.paid);
+        const k = `${yr}|${prog}|${lvl}`; const t = (T[k] ??= { deals: 0, invoiced: 0, paid_deals: 0, paid: 0 });
+        t.deals++; t.invoiced += amt; if (isPaid) { t.paid_deals++; t.paid += amt; }
+      }
+      const srows = Object.entries(T).map(([k, t]) => { const [year, program, level] = k.split("|"); return { year: +year, program, level, deals: t.deals, invoiced: Math.round(t.invoiced * 100) / 100, paid_deals: t.paid_deals, paid: Math.round(t.paid * 100) / 100, updated_at: new Date().toISOString() }; });
+      if (srows.length) {
+        await db.from("sponsorship_totals").delete().gte("year", 0);
+        const { error } = await db.from("sponsorship_totals").insert(srows);
+        if (error) throw new Error(error.message);
+      }
+      spons = recs.length;
+    } catch (e) { console.error("sponsorships:", e); }
+
+    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: orgs.length, events_written: g("members"), note: `${g("members")} members for ${Y}; ${spons} sponsorships` });
     await db.from("sync_log").insert(log);
     return json({ ok: true, year: Y, members: g("members"), renewal_rate: S["renewal_rate|"], orgs: orgs.length });
   } catch (err) {

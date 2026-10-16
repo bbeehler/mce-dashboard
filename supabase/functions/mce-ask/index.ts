@@ -138,6 +138,20 @@ async function buildBrief() {
     }
   } catch { /* membership is optional */ }
 
+  // Sponsorship totals from Insightly, and the team's notes on the charts.
+  try {
+    const sp = await all("sponsorship_totals", "year,program,level,deals,invoiced,paid_deals,paid", (q) => q.gte("year", new Date().getUTCFullYear() - 2).order("year"));
+    if (sp.length) {
+      lines.push(`\n## Sponsorship (Insightly Sponsorship records, by sponsorship year; CCIF combines both forums; program "AIA Canada" = annual corporate partners such as Maple Leaf and Gold)\nyear | program | level | sponsorships | invoiced | paid invoices | paid amount`);
+      for (const r of sp) lines.push(`${r.year} | ${r.program} | ${r.level} | ${r.deals} | ${Math.round(Number(r.invoiced))} | ${r.paid_deals} | ${Math.round(Number(r.paid))}`);
+    }
+    const cn = await all("month_notes", "period,topic,note", (q) => q.like("topic", "chart:%").order("period"));
+    if (cn.length) {
+      lines.push(`\n## Team notes on the charts (context for spikes and dips)\nmonth | applies to | note`);
+      for (const n of cn) lines.push(`${n.period.slice(0, 7)} | ${n.topic.slice(6)} | ${n.note}`);
+    }
+  } catch { /* optional */ }
+
   // Send plan from the eBlast calendar (next 8 weeks).
   try {
     const r = await fetch(EBLAST_URL, { headers: { "cache-control": "no-cache" } });

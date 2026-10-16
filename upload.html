@@ -28,7 +28,7 @@ h2{font-family:var(--display);font-size:18px;margin:0}
 p{margin:0;max-width:68ch}
 .muted{color:var(--muted);font-size:13px}
 label{font-weight:600;font-size:13px}
-input[type=email],input[type=month]{font:inherit;padding:8px 10px;border:1px solid var(--grid);border-radius:6px;background:var(--surface);color:var(--ink);min-width:240px}
+input[type=email],input[type=month],select{font:inherit;padding:8px 10px;border:1px solid var(--grid);border-radius:6px;background:var(--surface);color:var(--ink);min-width:240px}
 input[type=file]{font:inherit}
 button,.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
 button.ghost,.btn.ghost{background:transparent;color:var(--accent)}
@@ -68,7 +68,7 @@ td.n{text-align:right}
 .sn-note textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--grid);border-radius:6px;padding:8px 10px;resize:vertical}
 @media (max-width:560px){.sn-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sn-score{grid-column:1/-1;padding-left:0}}
 ol{margin:0;padding-left:20px;display:grid;gap:4px}
-@media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month]{min-width:0;width:100%}}
+@media (max-width:560px){.wrap{padding-inline:16px}input[type=email],input[type=month],select{min-width:0;width:100%}}
 </style>
 </head>
 <body>
@@ -153,6 +153,17 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div class="tbl" style="margin-top:12px"><table id="snHist"></table></div>
   </section>
 
+  <section class="card" id="notesCard" hidden>
+    <h2>7. Notes on the charts</h2>
+    <p>Add a short note to a month, such as “CAIC early-bird launch” or “Boosted LinkedIn post”. It appears as a dot on that month in the dashboard charts, and the text shows when someone hovers over it, so a spike or dip explains itself. One note per month for each group of charts.</p>
+    <div class="row"><label for="ntMonth">Month</label><input id="ntMonth" type="month">
+      <label for="ntStream">Show on</label><select id="ntStream"><option value="all">All charts</option><option value="marketing">Website charts</option><option value="communications">Email &amp; social charts</option><option value="membership">Membership charts</option></select></div>
+    <label class="sn-note">Note <span class="muted">(up to 200 characters)</span><textarea id="ntText" rows="2" maxlength="200" placeholder="e.g. CCIF Montréal early-bird deadline; two reminder emails"></textarea></label>
+    <div class="row"><button id="ntSave" type="button">Save note</button><span class="muted" id="ntHint"></span></div>
+    <div id="ntMsg"></div>
+    <div class="tbl" style="margin-top:12px"><table id="ntList"></table></div>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -205,7 +216,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -336,12 +347,13 @@ const TG=[
  ["Engagement","engagement","pheedloop","registrations_held","","higher","n","Event registrations","All events in the year: held, plus registrations for events still to come","event"],
  ["Engagement","engagement","pheedloop","attendance_held","","higher","n","Event attendance","Events held during the year","event"],
  ["Engagement","engagement","pheedloop","revenue_held","","higher","money","Event revenue","All events in the year, from revenue uploaded","event"],
+ ["Engagement","engagement","insightly_sponsorship","sponsorship_invoiced","","higher","money","Sponsorship revenue","Amount invoiced for the sponsorship year, all events and corporate partners, from Insightly","spons"],
  ["Membership","membership","insightly_members","members","","higher","n","Members","Organisations whose last membership year is this year or later (lifetime included), from Insightly","member:members"],
  ["Membership","membership","insightly_members","renewal_rate","","higher","pct","Renewal rate","Last year's members who renewed (lifetime members left out)","member:renewal_rate"],
  ["Membership","membership","insightly_members","new","","higher","n","New members","Members who joined during the year","member:new"],
  ["Membership","membership","insightly_members","dues","","higher","money","Membership dues","Dues before tax for the year","member:dues"],
 ].map(([group,stream,source,metric,dimension,better,unit,label,how,kind])=>({group,stream,source,metric,dimension,better,unit,label,how,kind}));
-let tgYear=new Date().getFullYear(),tgSaved=[],MEM=[];
+let tgYear=new Date().getFullYear(),tgSaved=[],MEM=[],SPONS=[];
 const tgKey=t=>`${t.stream}|${t.source}|${t.metric}|${t.dimension}`;
 const tgShow=(t,v)=>v==null?"–":t.unit==="pct"?(v*100).toFixed(1)+"%":t.unit==="dec"?v.toFixed(1):t.unit==="money"?"$"+fmt(Math.round(v)):fmt(Math.round(v));
 const tgIn=(t,v)=>v==null?"":t.unit==="pct"?+(v*100).toFixed(2)+"":t.unit==="dec"?+v.toFixed(2)+"":String(Math.round(v));
@@ -353,6 +365,7 @@ function soFar(t,rows,y){
   if(k==="avg"){const o=get(arg),ms=Object.keys(o);return ms.length?{v:Object.values(o).reduce((a,b)=>a+b,0)/ms.length,n:ms.length}:null}
   if(k==="level"){const o=get(t.metric,t.dimension),ms=Object.keys(o).sort();return ms.length?{v:o[ms[ms.length-1]],n:ms.length,latest:ms[ms.length-1]}:null}
   if(k==="net"){const g=m=>Object.values(get(m)).reduce((a,b)=>a+b,0),p=g("sent_positive"),u=g("sent_neutral"),n=g("sent_negative"),t=p+u+n,ms=Object.keys(get("sent_positive")).length;return t?{v:(p-n)/t*100,n:ms}:null}
+  if(k==="spons"){return SPONS.length?{v:SPONS.filter(r=>r.year===y).reduce((a,r)=>a+Number(r.invoiced),0),n:0,member:true}:null}
   if(k==="member"){const r=MEM.filter(x=>x.year===y&&x.metric===arg);return r.length?{v:Number(r[0].value),n:0,member:true}:null}
   if(k==="sumdims"){const o=yr.filter(r=>r.metric===arg),ms=new Set(o.map(r=>r.period));return o.length?{v:o.reduce((a,r)=>a+Number(r.value),0),n:ms.size}:null}
   return null;
@@ -363,6 +376,7 @@ async function loadTargets(){
   $("tgYears").querySelectorAll("button").forEach(b=>b.onclick=()=>{tgYear=+b.dataset.y;loadTargets()});
   try{const r=await fetch(`${SUPABASE_URL}/rest/v1/targets?select=year,stream,source,metric,dimension,target&year=eq.${tgYear}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});tgSaved=r.ok?await r.json():[]}catch(e){tgSaved=[]}
   let rows=[];try{rows=await loadExisting()}catch(e){}
+  try{SPONS=await sbGet("sponsorship_totals?select=year,invoiced")}catch(e){SPONS=[]}
   try{const last=await sbGet("member_snap?select=as_of&order=as_of.desc&limit=1");MEM=last.length?await sbGet(`member_snap?select=year,metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`):[]}catch(e){MEM=[]}
   let grp="",h=`<thead><tr><th>Measure</th><th style="text-align:right">${tgYear} so far</th><th style="text-align:right">${tgYear} target</th></tr></thead><tbody>`;
   TG.forEach((t,i)=>{
@@ -458,6 +472,30 @@ $("snSave").onclick=async()=>{
   catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("snMsg","err",`Not saved: ${esc(err.message)}`)}
   $("snSave").disabled=false;
 };
+
+/* ---------- notes on the charts ---------- */
+const NT_LABEL={all:"All charts",marketing:"Website",communications:"Email & social",engagement:"Events",membership:"Membership"};
+let ntRows=[];
+async function loadNotes(){
+  if(!$("ntMonth").value){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);$("ntMonth").value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
+  try{ntRows=await sbGet("month_notes?select=period,topic,note&topic=like.chart:*&order=period.desc")}catch(e){ntRows=[]}
+  $("ntList").innerHTML=ntRows.length?`<thead><tr><th>Month</th><th>Shows on</th><th>Note</th><th></th></tr></thead><tbody>${ntRows.slice(0,36).map((n,i)=>`<tr><td>${monthLabel(n.period)}</td><td>${NT_LABEL[n.topic.slice(6)]||""}</td><td>${esc(n.note)}</td><td class="n"><button type="button" class="btn ghost" data-edit="${i}">Edit</button> <button type="button" class="btn ghost" data-del="${i}">Delete</button></td></tr>`).join("")}</tbody>`:'<tbody><tr><td class="muted">No notes yet.</td></tr></tbody>';
+  $("ntList").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{const n=ntRows[+b.dataset.edit];$("ntMonth").value=n.period.slice(0,7);$("ntStream").value=n.topic.slice(6);ntFill();$("ntText").focus()});
+  $("ntList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{const n=ntRows[+b.dataset.del];if(!confirm(`Delete the ${monthLabel(n.period)} note?`))return;await ntSend(n.period,n.topic.slice(6),null)});
+  ntFill();
+}
+function ntFill(){const cur=ntRows.find(n=>n.period===$("ntMonth").value+"-01"&&n.topic==="chart:"+$("ntStream").value);$("ntText").value=cur?cur.note:"";$("ntHint").textContent=cur?"Editing the saved note for this month. Clear the box and save to remove it.":""}
+$("ntMonth").addEventListener("input",ntFill);$("ntStream").addEventListener("change",ntFill);
+async function ntSend(period,stream,note){
+  $("ntSave").disabled=true;msg("ntMsg","warn","Saving…");
+  try{await call("note",{period,topic:"chart:"+stream,note});await loadNotes();msg("ntMsg","ok",note?`Saved the ${monthLabel(period)} note. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see it.`:`Removed the ${monthLabel(period)} note.`)}
+  catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("ntMsg","err",`Not saved: ${esc(err.message)}`)}
+  $("ntSave").disabled=false;
+}
+$("ntSave").onclick=()=>{if(!$("ntMonth").value){msg("ntMsg","err","Choose the month.");return}
+  const t=$("ntText").value.trim(),period=$("ntMonth").value+"-01",stream=$("ntStream").value;
+  if(!t&&!ntRows.find(n=>n.period===period&&n.topic==="chart:"+stream)){msg("ntMsg","err","Write a note first.");return}
+  ntSend(period,stream,t||null)};
 
 async function loadHistory(){
   let data;try{data=(await call("history")).uploads}catch(e){$("history").textContent="Upload history isn't available right now.";return}

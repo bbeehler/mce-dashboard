@@ -237,6 +237,24 @@ html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;paddin
 .err{color:var(--muted);font-size:12.5px}
 
 /* Tooltip */
+#tip .tipnote{margin-top:6px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--surface) 35%,transparent);font-style:italic}
+#tip .tipnote b{font-style:normal}
+.notes-strip{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:13px;color:var(--ink-2)}
+.notes-strip .lbl{font-size:12px;color:var(--muted)}
+.notes-strip .nt{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:6px 10px;display:inline-flex;gap:8px;align-items:baseline}
+.notes-strip .nt i{width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none;align-self:center}
+.notes-strip .nt small{color:var(--muted)}
+.spons{display:grid;gap:10px}
+.sp-row{display:grid;grid-template-columns:minmax(150px,26%) 1fr 92px 70px;gap:12px;align-items:center;font-size:13px}
+.sp-row .nm b{display:block;color:var(--ink)}.sp-row .nm small{color:var(--muted);font-size:11.5px}
+.sp-row .tr{position:relative;height:14px;background:var(--wash);border-radius:0 4px 4px 0}
+.sp-row .tr .f{position:absolute;inset:0 auto 0 0;background:var(--s1);border-radius:0 4px 4px 0}
+.sp-row .tr .ly{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);border-radius:1px}
+.sp-row .v{text-align:right;color:var(--ink);font-weight:600}
+.sp-row .d{text-align:right;font-size:12px}
+.sp-row.tot{border-top:1px solid var(--grid);padding-top:10px}
+.sp-lv{font-size:11.5px;color:var(--muted);grid-column:1/-1;margin-top:-6px;padding-left:2px}
+@media (max-width:640px){.sp-row{grid-template-columns:1fr 84px;}.sp-row .tr{grid-column:1/-1;order:3}.sp-row .d,.sp-row.tot>div:nth-child(2){display:none}}
 #tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;line-height:1.4;padding:7px 9px;border-radius:6px;max-width:240px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 #tip b{font-weight:600}
 #tip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
@@ -315,6 +333,7 @@ html{scroll-behavior:smooth}
 <main class="wrap" id="main">
   <div class="sources" id="coverage"></div>
   <section aria-label="Headline numbers" class="kpis" id="kpis"></section>
+  <div class="notes-strip" id="monthNotes" hidden></div>
   <section class="card targets" id="targets" aria-labelledby="tgH"><h3 id="tgH"><span id="tgTitle">Targets</span> <span class="sub" id="tgSub"></span></h3><div class="tblwrap"><table class="mini" id="tgTable"></table></div><p class="note" id="tgNote"></p></section>
 
   <section class="stream" id="marketing" aria-labelledby="mkH">
@@ -355,6 +374,8 @@ html{scroll-behavior:smooth}
   <section class="stream" id="engagement" aria-labelledby="enH">
     <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
     <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
+    <div class="card" id="sponsCard"><h3>Sponsorship revenue by event <span class="sub" id="spSub"></span></h3><div class="spons" id="spons"></div>
+      <div class="legend"><span><i class="sw" style="--c:var(--s1)"></i>Invoiced this year</span><span><i style="--c:var(--ink-2);width:2px;height:12px;border-radius:1px"></i>Last year, same event</span></div><p class="note" id="spNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
   </section>
 
@@ -406,6 +427,15 @@ const ticksFor=ymax=>{const lead=+(ymax/Math.pow(10,Math.floor(Math.log10(ymax))
 function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p}
 function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
 
+// Notes on the charts: o.notes is an array (same length as labels) of note text or null. Each note gets a
+// small dot at the top of its month with a dashed line down, and the text is added to that month's tooltip.
+function noteMarks(svg,o,xAt,top,bottom){
+  if(!o.notes)return;
+  o.notes.forEach((t,i)=>{if(!t)return;const x=xAt(i);
+    el("line",{x1:x,x2:x,y1:top,y2:bottom,stroke:css("--ink-2"),"stroke-width":1,"stroke-dasharray":"2 3",opacity:.6,"pointer-events":"none"},svg);
+    el("circle",{cx:x,cy:top,r:4,fill:css("--ink"),stroke:css("--surface"),"stroke-width":1.5,"pointer-events":"none"},svg)});
+}
+const noteTip=(o,i)=>o.notes&&o.notes[i]?`<div class="tipnote"><b>Note:</b> ${esc(o.notes[i])}</div>`:"";
 // Line chart: {labels, series:[{name,color,values,dash}], yFmt, target, height, endLabels}
 function lineChart(host,o){
   host.innerHTML="";
@@ -430,11 +460,12 @@ function lineChart(host,o){
   });
   if(o.endLabels){ends.sort((a,b)=>a.y-b.y);for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<14)ends[i].y=ends[i-1].y+14;
     ends.forEach(e=>{const t=el("text",{x:m.l+iw+10,y:e.y+4,class:"lbl"},svg);t.textContent=e.s.name})}
+  noteMarks(svg,o,x,m.t,m.t+ih);
   const cross=el("line",{y1:m.t,y2:m.t+ih,stroke:css("--axis"),"stroke-width":1,visibility:"hidden"},svg);
   const hit=el("rect",{x:m.l,y:m.t,width:iw,height:ih,fill:"transparent"},svg);
   hit.addEventListener("mousemove",ev=>{const r=svg.getBoundingClientRect();const px=(ev.clientX-r.left)*(W/r.width);const i=Math.max(0,Math.min(n-1,Math.round((px-m.l)/(iw/Math.max(1,n-1)))));
     cross.setAttribute("x1",x(i));cross.setAttribute("x2",x(i));cross.setAttribute("visibility","visible");
-    showTip(`<b>${esc(o.tipLabel?o.tipLabel(i):o.labels[i])}</b>`+o.series.filter(s=>s.values[i]!=null).map(s=>`<div><span class="sw" style="background:${css(s.color)}"></span>${esc(s.name)}: <b>${o.yFmt?o.yFmt(s.values[i]):fmt(s.values[i])}</b></div>`).join(""),ev.clientX,ev.clientY)});
+    showTip(`<b>${esc(o.tipLabel?o.tipLabel(i):o.labels[i])}</b>`+o.series.filter(s=>s.values[i]!=null).map(s=>`<div><span class="sw" style="background:${css(s.color)}"></span>${esc(s.name)}: <b>${o.yFmt?o.yFmt(s.values[i]):fmt(s.values[i])}</b></div>`).join("")+noteTip(o,i),ev.clientX,ev.clientY)});
   hit.addEventListener("mouseleave",()=>{cross.setAttribute("visibility","hidden");hideTip()});
 }
 
@@ -456,8 +487,9 @@ function colChart(host,o){
     if(i%step===0){const lt=el("text",{x:cx,y:H-6,"text-anchor":"middle"},svg);lt.textContent=o.labels[i]}
     if(o.labelIf&&o.labelIf(i,v)){const t=el("text",{x:cx,y:top-5,"text-anchor":"middle",class:"lbl"},svg);t.textContent=o.yFmt?o.yFmt(v):fmt(v)}
     const hit=el("rect",{x:m.l+band*i,y:m.t,width:band,height:ih,fill:"transparent"},svg);
-    hit.addEventListener("mousemove",ev=>showTip(o.tip(i),ev.clientX,ev.clientY));hit.addEventListener("mouseleave",hideTip);
+    hit.addEventListener("mousemove",ev=>showTip(o.tip(i)+noteTip(o,i),ev.clientX,ev.clientY));hit.addEventListener("mouseleave",hideTip);
   });
+  noteMarks(svg,o,i=>m.l+band*i+band/2,m.t,y(0));
   if(o.cap!=null){el("line",{x1:m.l,x2:m.l+iw,y1:y(o.cap),y2:y(o.cap),stroke:css("--ink-2"),"stroke-width":1.5,"stroke-dasharray":"5 4","pointer-events":"none"},svg)}
 }
 
@@ -621,7 +653,7 @@ function metricGrid(gridId,tableId,noteId,rows,has,empty){
   $(gridId).innerHTML=rows.map((r,i)=>{const c=r[1](p);return `<div class="tile"><div class="t-k">${esc(r[0])}</div><div class="t-v">${c==null?"–":r[2](c)}</div><div class="t-d">${chips(r[1],r[3]||{})}</div><div data-i="${i}"></div></div>`}).join("");
   rows.forEach((r,i)=>{const vals=monthly(()=>months.map(r[1]));const host=$(gridId).querySelector(`[data-i="${i}"]`);
     if(!vals.some(v=>v!=null))return;
-    colChart(host,{labels:months.map(mShort),values:vals.map(v=>v??0),height:92,axis:false,colorFor:()=> "--seq",dimFor:k=>!win.has(months[k]),
+    colChart(host,{labels:months.map(mShort),values:vals.map(v=>v??0),height:92,axis:false,colorFor:()=> "--seq",dimFor:k=>!win.has(months[k]),notes:notesFor(months,gridId==="webGrid"?"marketing":"communications"),
       tip:k=>`<b>${mLabel(months[k],{month:"long",year:"numeric"})}</b><div>${esc(r[0])}: <b>${vals[k]==null?"not uploaded":r[2](vals[k])}</b></div>`})});
   $(noteId).textContent=`Each bar is one month (last 13). Solid bars are the month${YTD?"s":""} counted in the number above; faded bars are for context. Hover a bar for its value.`;
   $(tableId).innerHTML=metricTable(rows);
@@ -633,7 +665,7 @@ function renderMarketing(){
   const ser=[{name:"Sessions",color:"--s2",values:sess},{name:"Engaged sessions",color:"--s1",values:engs}].filter(x=>x.values.some(v=>v!=null));
   const spikes=months.filter(lowQuality);
   $("webNote").innerHTML=spikes.length?`<b>Traffic spike${spikes.length>1?"s":""}:</b> ${spikes.map(m=>{const q=lowQuality(m);return `${mLabel(m,{month:"short",year:"numeric"})} (${pct(q.share,0)} from Organic Social, ${pct(q.er,0)} engaged${q.sec!=null?`, ${Math.round(q.sec)}s average`:""})`}).join("; ")}. These look like boosted posts or bot traffic, so engaged sessions is the better measure of real visits.`:"Engaged sessions are visits that lasted 10 seconds or more, viewed 2+ pages, or converted.";
-  if(ser.length){lineChart($("webChart"),{labels:months.map(mShort),endLabels:true,height:230,tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),series:ser});$("webLegend").innerHTML=ser.map(x=>`<span><i style="--c:var(${x.color})"></i>${x.name}</span>`).join("")}
+  if(ser.length){lineChart($("webChart"),{labels:months.map(mShort),notes:notesFor(months,"marketing"),endLabels:true,height:230,tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),series:ser});$("webLegend").innerHTML=ser.map(x=>`<span><i style="--c:var(${x.color})"></i>${x.name}</span>`).join("")}
   else{emptyNote("webChart","No GA4 numbers uploaded for the last 13 months.");$("webLegend").innerHTML=""}
   $("chanSub").textContent="· "+winLabel(p,true);
   const ch=CHANNELS.map(c=>({c,v:val(p,"ga4","sessions",c)})).filter(x=>x.v!=null);
@@ -656,14 +688,14 @@ function renderComms(){
   const p=state.month,months=series(()=>0).map(x=>x.p);
   const bs=monthly(()=>months.map(x=>allVal(x,"insightly","broad_sends_main_list")));
   if(bs.some(v=>v!=null)){
-    colChart($("loadChart"),{labels:months.map(mShort),values:bs.map(v=>v??0),cap:MONTH_CAP,height:190,colorFor:(i,v)=>v>MONTH_CAP?"--crit":"--seq",labelIf:(i,v)=>bs[i]!=null&&(v>MONTH_CAP||months[i]===p),
+    colChart($("loadChart"),{labels:months.map(mShort),notes:notesFor(months,"communications"),values:bs.map(v=>v??0),cap:MONTH_CAP,height:190,colorFor:(i,v)=>v>MONTH_CAP?"--crit":"--seq",labelIf:(i,v)=>bs[i]!=null&&(v>MONTH_CAP||months[i]===p),
       tip:i=>`<b>${mLabel(months[i],{month:"long",year:"numeric"})}</b><div>${bs[i]==null?"Not uploaded":bs[i]+" broad sends"}</div>${allVal(months[i],"insightly","opt_outs_main_list")!=null?`<div>${fmt(allVal(months[i],"insightly","opt_outs_main_list"))} opt-outs from those sends</div>`:""}`});
   } else emptyNote("loadChart","No main-list send counts uploaded for the last 13 months.");
   const open=x=>rv(x,"insightly","unique_opens","delivered");
   const click=x=>rv(x,"insightly","unique_clicks","delivered");
   const so=monthly(()=>months.map(open)),sc=monthly(()=>months.map(click));
   if(so.some(v=>v!=null)){
-    lineChart($("rateChart"),{labels:months.map(mShort),height:190,yFmt:v=>pct(v,0),tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),endLabels:true,series:[{name:"Open rate",color:"--s1",values:so},{name:"Click rate",color:"--s2",values:sc}]});
+    lineChart($("rateChart"),{labels:months.map(mShort),notes:notesFor(months,"communications"),height:190,yFmt:v=>pct(v,0),tipLabel:i=>mLabel(months[i],{month:"long",year:"numeric"}),endLabels:true,series:[{name:"Open rate",color:"--s1",values:so},{name:"Click rate",color:"--s2",values:sc}]});
     $("rateLegend").innerHTML=`<span><i style="--c:var(--s1)"></i>Unique open rate</span><span><i style="--c:var(--s2)"></i>Unique click rate</span><span class="muted">Peers: opens ${pct(BENCH.open)}, clicks ${pct(BENCH.click)}</span>`;
   } else {emptyNote("rateChart","Open and click rates appear once monthly Insightly numbers (delivered, unique opens, unique clicks) are uploaded. The 2026 audit only has year-to-date rates: 23.3% opens and 4.4% clicks.");$("rateLegend").innerHTML=""}
   renderFatigue(months);renderSentiment(months);
@@ -693,7 +725,7 @@ function sentNet(x){const p=val(x,"sentiment","sent_positive"),u=val(x,"sentimen
 const sentLabel=v=>v==null?null:v>=0.3?{kind:"good",label:"Strongly positive"}:v>=0.1?{kind:"good",label:"Positive"}:v>-0.1?{kind:"none",label:"Mixed"}:{kind:"crit",label:"Negative"};
 const sentFmt=v=>v==null?"–":(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v*100));
 // Diverging monthly bars around zero: blue above (net positive), orange below (net negative).
-function netChart(host,months,vals,win){
+function netChart(host,months,vals,win,notes){
   host.innerHTML="";const W=host.clientWidth||520,H=190,m={t:14,r:8,b:24,l:34},iw=W-m.l-m.r,ih=H-m.t-m.b;
   const svg=el("svg",{class:"chart",viewBox:`0 0 ${W} ${H}`,width:W,height:H,role:"img","aria-label":"Net sentiment by month"},host);
   const y=v=>m.t+ih/2-(ih/2)*v;[1,0.5,0,-0.5,-1].forEach(v=>{el("line",{x1:m.l,x2:m.l+iw,y1:y(v),y2:y(v),class:v===0?"base":"grid"},svg);const t=el("text",{x:m.l-6,y:y(v)+4,"text-anchor":"end"},svg);t.textContent=sentFmt(v)});
@@ -703,8 +735,9 @@ function netChart(host,months,vals,win){
     if(v!=null&&v!==0){const top=Math.min(y(v),y(0)),h=Math.abs(y(v)-y(0));el("rect",{x:cx-bw/2,y:top,width:bw,height:Math.max(1,h),rx:Math.min(3,h/2),fill:css(v>0?"--s1":"--s2"),"fill-opacity":win.has(mo)?1:0.35},svg)}
     if(v!=null&&win.has(mo)&&months[i]===state.month){const t=el("text",{x:cx,y:v>=0?y(v)-5:y(v)+13,"text-anchor":"middle",class:"lbl"},svg);t.textContent=sentFmt(v)}
     const hit=el("rect",{x:m.l+band*i,y:m.t,width:band,height:ih,fill:"transparent"},svg);
-    hit.addEventListener("mousemove",ev=>{const p=mval(mo,"sentiment","sent_positive"),u=mval(mo,"sentiment","sent_neutral"),ng=mval(mo,"sentiment","sent_negative");showTip(`<b>${mLabel(mo,{month:"long",year:"numeric"})}</b><div>${v==null?"Not entered":`Net score <b>${sentFmt(v)}</b>`}</div>${v!=null?`<div>${fmt(p)} positive · ${fmt(u)} neutral · ${fmt(ng)} negative</div>`:""}`,ev.clientX,ev.clientY)});
+    hit.addEventListener("mousemove",ev=>{const p=mval(mo,"sentiment","sent_positive"),u=mval(mo,"sentiment","sent_neutral"),ng=mval(mo,"sentiment","sent_negative");showTip(`<b>${mLabel(mo,{month:"long",year:"numeric"})}</b><div>${v==null?"Not entered":`Net score <b>${sentFmt(v)}</b>`}</div>${v!=null?`<div>${fmt(p)} positive · ${fmt(u)} neutral · ${fmt(ng)} negative</div>`:""}`+noteTip({notes},i),ev.clientX,ev.clientY)});
     hit.addEventListener("mouseleave",hideTip)});
+  noteMarks(svg,{notes},i=>m.l+band*i+band/2,m.t,m.t+ih);
 }
 function renderSentiment(months){
   const p=state.month,v=sentNet(p),win=new Set(YTD?ytdMonths(p):[p]);
@@ -718,7 +751,7 @@ function renderSentiment(months){
      <div class="mix">${[[pos,"--s1"],[neu,"--muted"],[neg,"--s2"]].filter(x=>x[0]>0).map(([a,c])=>`<i style="width:${a/t*100}%;background:var(${c})"></i>`).join("")}</div>
      <div class="mixl"><span><i style="background:var(--s1)"></i>${pct(pos/t,0)} positive</span><span><i style="background:var(--muted)"></i>${pct(neu/t,0)} neutral</span><span><i style="background:var(--s2)"></i>${pct(neg/t,0)} negative</span></div>
      ${nt?`<div class="why"><b>What drove it${YTD?` (${mLabel(nt.m,{month:"short"})})`:""}:</b> ${esc(nt.n.note)}</div>`:""}`;
-  netChart($("sentChart"),months,vals,win);
+  netChart($("sentChart"),months,vals,win,notesFor(months,"communications"));
 }
 
 /* ---------- social charts: all platforms together + each platform ---------- */
@@ -738,7 +771,7 @@ function renderSocial(months){
     let t=null;for(const pl of plats){const v=mval(x,"social",k,pl);if(v!=null)t=(t||0)+v}return t}));
   const lbl=SOC.find(x=>x[0]===k)[1];
   $("socAllSub").textContent=`· ${lbl.toLowerCase()}${isLevel?" at month end":isRate?", combined":" per month"}`;
-  colChart($("socAll"),{labels:months.map(mShort),values:all.map(v=>v??0),height:200,yFmt:isRate?v=>pct(v,0):undefined,colorFor:()=>"--seq",dimFor:i=>!win.has(months[i]),labelIf:(i,v)=>all[i]!=null&&months[i]===p,
+  colChart($("socAll"),{labels:months.map(mShort),notes:notesFor(months,"communications"),values:all.map(v=>v??0),height:200,yFmt:isRate?v=>pct(v,0):undefined,colorFor:()=>"--seq",dimFor:i=>!win.has(months[i]),labelIf:(i,v)=>all[i]!=null&&months[i]===p,
     tip:i=>`<b>${mLabel(months[i],{month:"long",year:"numeric"})}</b><div>All platforms: <b>${show(all[i])}</b></div>`+plats.map(pl=>{const v=mOf(months[i],pl);return v==null?"":`<div><span class="sw" style="background:${css(PCOLOR[pl])}"></span>${pl}: ${show(v)}</div>`}).join("")});
   // share (or rate) by platform for the selected period
   const w=plats.map(pl=>({pl,v:winOf(pl)})).filter(x=>x.v!=null);
@@ -757,7 +790,7 @@ function renderFatigue(months){
   const per=x=>{const o=mval(x,"insightly","opt_outs_main_list"),b=mval(x,"insightly","broad_sends_main_list");return o!=null&&b?o/b:null};
   const vals=months.map(per),bs=months.map(x=>mval(x,"insightly","broad_sends_main_list")),op=months.map(x=>rv(x,"insightly","unique_opens","delivered"));
   if(vals.filter(v=>v!=null).length<2){emptyNote("fatChart","Needs at least two months with broad sends and opt-outs from those sends.");$("fatNote").innerHTML="";$("fatLegend").innerHTML="";return}
-  lineChart($("fatChart"),{labels:months.map(mShort),height:190,yFmt:v=>+v.toFixed(2)+"",tipLabel:i=>`${mLabel(months[i],{month:"long",year:"numeric"})}${bs[i]!=null?` · ${bs[i]} broad sends`:""}${op[i]!=null?` · ${pct(op[i])} opens`:""}`,series:[{name:"Opt-outs per broad send",color:"--s1",values:vals}]});
+  lineChart($("fatChart"),{labels:months.map(mShort),notes:notesFor(months,"communications"),height:190,yFmt:v=>+v.toFixed(2)+"",tipLabel:i=>`${mLabel(months[i],{month:"long",year:"numeric"})}${bs[i]!=null?` · ${bs[i]} broad sends`:""}${op[i]!=null?` · ${pct(op[i])} opens`:""}`,series:[{name:"Opt-outs per broad send",color:"--s1",values:vals}]});
   $("fatLegend").innerHTML='<span><i style="--c:var(--s1)"></i>Opt-outs from the main list ÷ broad sends that month</span>';
   const idx=vals.map((v,i)=>v==null?-1:i).filter(i=>i>=0),first=idx.slice(0,3),last=idx.slice(-3);
   const avg=ix=>{const o=ix.reduce((a,i)=>a+mval(months[i],"insightly","opt_outs_main_list"),0),b=ix.reduce((a,i)=>a+bs[i],0);return b?o/b:null};
@@ -824,6 +857,7 @@ const TARGETS=[
   {stream:"engagement",source:"pheedloop",metric:"registrations_held",label:"Event registrations, all events this year",kind:"event",f:"regs"},
   {stream:"engagement",source:"pheedloop",metric:"attendance_held",label:"Event attendance, events held",kind:"event",f:"att"},
   {stream:"engagement",source:"pheedloop",metric:"revenue_held",label:"Event revenue, all events this year",kind:"event",f:"rev",money:true},
+  {stream:"engagement",source:"insightly_sponsorship",metric:"sponsorship_invoiced",label:"Sponsorship revenue (invoiced)",kind:"spons",money:true},
   {stream:"membership",source:"insightly_members",metric:"members",label:"Members",kind:"member"},
   {stream:"membership",source:"insightly_members",metric:"renewal_rate",label:"Membership renewal rate",kind:"member",rate:true},
   {stream:"membership",source:"insightly_members",metric:"new",label:"New members",kind:"member"},
@@ -838,6 +872,7 @@ function targetActual(t,p){
       const evs=yearEvents(+p.slice(0,4)),held=evs.filter(e=>e.held),up=evs.filter(e=>!e.held);
       const sum=a=>a.reduce((s,e)=>s+(e[t.f]||0),0),vHeld=sum(held),vUp=t.f==="att"?0:sum(up);
       return{v:vHeld+vUp,vHeld,vUp,held,up,withData:evs.filter(e=>e[t.f]!=null&&e[t.f]>0).length,n:evs.length}}
+    if(t.kind==="spons"){const y=+p.slice(0,4),rows=(D.spons||[]).filter(r=>r.year===y);return{v:rows.length?rows.reduce((a,r)=>a+Number(r.invoiced),0):null,n:0}}
     if(t.kind==="member"){const v=D.mem&&D.mem.year===+p.slice(0,4)?D.mem.snap[t.metric]:null;return{v:v??null,n:0}}
     if(t.kind==="net"){const used=keptMonths(p,"sentiment",["sent_positive"],"");const v=sentNet(p);return{v:v==null?null:v*100,n:used.length}}
     if(t.kind==="rate"){const used=keptMonths(p,t.source,[t.num,t.den],"");return{v:rv(p,t.source,t.num,t.den),n:used.length}}
@@ -852,7 +887,7 @@ function renderTargets(){
   const p=state.month,y=+p.slice(0,4),list=TARGETS.map(t=>({...t,tg:D.targets.find(x=>x.year===y&&x.stream===t.stream&&x.source===t.source&&x.metric===t.metric&&(x.dimension||"")===(t.dimension||""))})).filter(t=>t.tg);
   $("tgTitle").textContent=`${y} targets`;$("tgSub").textContent=`· year to date, through ${mLabel(p,{month:"long"})}`;
   if(!list.length){$("tgTable").innerHTML="";$("tgNote").innerHTML=`No targets set for ${y} yet. Set them under <a href="upload.html#targetsCard">Yearly targets on the Upload month page</a>; the dashboard will then show whether each measure is on pace.`;return}
-  const show=(t,v)=>v==null?"–":t.kind==="member"?(t.money?money(v):t.rate?pct(v):fmt(v)):t.kind==="net"?(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v)):t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
+  const show=(t,v)=>v==null?"–":t.kind==="member"||t.kind==="spons"?(t.money?money(v):t.rate?pct(v):fmt(v)):t.kind==="net"?(v>0?"+":v<0?"−":"")+Math.abs(Math.round(v)):t.money?money(v):t.kind==="rate"?(t.dec?v.toFixed(1):pct(v)):t.kind==="avg"?v.toFixed(1):fmt(Math.round(v));
   const groups={marketing:"Marketing",communications:"Communications",engagement:"Engagement",membership:"Membership (live from Insightly)"};let cur="",h=`<thead><tr><th>Measure</th><th class="num">${y} target</th><th class="num">So far</th><th class="num">Expected by now</th><th style="width:22%">Progress</th><th>Status</th></tr></thead><tbody>`;
   for(const t of list){
     const target=Number(t.tg.target),better=t.tg.better||(t.dec||t.metric==="broad_sends_avg"?"lower":"higher"),a=targetActual(t,p);
@@ -860,7 +895,7 @@ function renderTargets(){
     if(a.v!=null){
       if(t.kind==="total"){exp=target*a.n/12;share=a.v/target;mark=exp/target;const r=a.v/exp;st=r>=1?{kind:"good",label:r>=1.1?"Ahead":"On pace"}:r>=0.9?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
       else if(t.kind==="level"){exp=a.start+(target-a.start)*a.n/12;share=Math.min(1,a.v/target);mark=Math.min(1,exp/target);const need=exp-a.start,got=a.v-a.start;const r=need>0?got/need:1;st=r>=1?{kind:"good",label:"On pace"}:r>=0.8?{kind:"serious",label:"Slightly behind"}:{kind:"crit",label:"Behind"}}
-      else if(t.kind==="member"&&!t.rate){share=a.v/target;st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`}}
+      else if((t.kind==="member"&&!t.rate)||t.kind==="spons"){share=a.v/target;st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`}}
       else if(t.kind==="event"){share=a.v/target;mark=a.vUp?Math.min(1,a.vHeld/target):null;
         st=a.v>=target?{kind:"good",label:"Target met"}:{kind:"none",label:`${pct(a.v/target,0)} of target`};
         const f=v=>t.money?money(v):fmt(v);
@@ -1019,7 +1054,7 @@ function renderMembership(){
   rows.forEach((r,ri)=>{
     const has=r.vals.some(v=>v!=null&&v>0),tot=r.vals.reduce((a,v)=>a+(v||0),0);
     host.insertAdjacentHTML("beforeend",`<h4>${r.name} <span class="sub">${r.sub} · ${has?fmt(tot)+" in these 12 months":"no data for these months"}</span></h4><div id="ml${ri}"></div>`);
-    colChart($("ml"+ri),{labels:months.map(mShort),values:r.vals.map(v=>v||0),height:ri===0?120:96,axis:false,colorFor:()=>r.color,dimFor:i=>!inSeason(months[i]),
+    colChart($("ml"+ri),{labels:months.map(mShort),notes:notesFor(months,["membership","communications","marketing","communications"][ri]),values:r.vals.map(v=>v||0),height:ri===0?120:96,axis:false,colorFor:()=>r.color,dimFor:i=>!inSeason(months[i]),
       labelIf:(i,v)=>v>0&&v===Math.max(...r.vals.map(x=>x||0)),yFmt:fmtShort,
       tip:i=>`<b>${mLabel(months[i],{month:"long",year:"numeric"})}</b><div>${r.vals[i]==null?"Not uploaded":r.tip?r.tip(i):`${r.name}: <b>${fmt(r.vals[i])}</b>`}</div>`,aria:r.name+" by month"});
   });
@@ -1038,9 +1073,48 @@ function renderMembership(){
   $("mlRead").innerHTML=lines.join("");
 }
 
+/* ---------- notes on the charts ---------- */
+// Entered on the Upload page, stored in month_notes with topic "chart:<stream>" (all, marketing, communications, engagement, membership).
+const NOTE_STREAMS={all:"All charts",marketing:"Website",communications:"Email & social",engagement:"Events",membership:"Membership"};
+function noteFor(p,stream){const t=(D.notes||[]).filter(x=>x.period===p&&(x.topic==="chart:all"||x.topic==="chart:"+stream)).map(x=>x.note);return t.length?t.join(" · "):null}
+const notesFor=(months,stream)=>months.map(p=>noteFor(p,stream));
+function renderMonthNotes(){
+  const p=state.month,ms=YTD?ytdMonths(p):[p];
+  const list=(D.notes||[]).filter(x=>x.topic.startsWith("chart:")&&ms.includes(x.period)).sort((a,b)=>a.period.localeCompare(b.period));
+  const host=$("monthNotes");host.hidden=!list.length;if(!list.length){host.innerHTML="";return}
+  host.innerHTML=`<span class="lbl">Notes for ${esc(winLabel(p,true))}</span>`+list.map(x=>`<span class="nt"><i></i><span>${esc(x.note)}</span><small>${YTD?mLabel(x.period,{month:"short"})+" · ":""}${NOTE_STREAMS[x.topic.slice(6)]||""}</small></span>`).join("");
+}
+
+/* ---------- sponsorship (live from Insightly) ---------- */
+// Insightly "Sponsorship" records totalled by sponsorship year, program and level. Levels that name an event
+// (Canada Night, Right to Repair) are shown under that event even when the program field says AIA Canada.
+function sponsGroup(r){if(/canada night|cabana|spotlight|cocktail/i.test(r.level)||/canada night/i.test(r.program))return "Canada Night";if(/right to repair/i.test(r.level))return "Right to Repair";
+  if(r.program==="CAIC")return "CAIC / National Conference";if(r.program==="CCIF")return "CCIF (both forums)";if(r.program==="AIA Canada")return "Corporate partners (Maple Leaf, Gold)";return r.program}
+function sponsByYear(y){const g={};for(const r of (D.spons||[]).filter(r=>r.year===y)){const k=sponsGroup(r),t=(g[k]??={deals:0,invoiced:0,paid:0,paid_deals:0,levels:{}});
+  t.deals+=r.deals;t.invoiced+=Number(r.invoiced);t.paid+=Number(r.paid);t.paid_deals+=r.paid_deals;t.levels[r.level]=(t.levels[r.level]||0)+r.deals}return g}
+function renderSponsorship(){
+  const y=+state.month.slice(0,4),cur=sponsByYear(y),prev=sponsByYear(y-1);
+  if(!D.spons||!D.spons.length){$("spons").innerHTML='<p class="empty-note">Sponsorship totals haven\'t synced from Insightly yet.</p>';$("spNote").textContent="";return}
+  const keys=[...new Set([...Object.keys(cur),...Object.keys(prev)])].sort((a,b)=>(cur[b]?.invoiced||0)-(cur[a]?.invoiced||0)||(prev[b]?.invoiced||0)-(prev[a]?.invoiced||0));
+  const mx=Math.max(1,...keys.map(k=>Math.max(cur[k]?.invoiced||0,prev[k]?.invoiced||0)));
+  const tc=keys.reduce((a,k)=>a+(cur[k]?.invoiced||0),0),tp=keys.reduce((a,k)=>a+(prev[k]?.invoiced||0),0),tpaid=keys.reduce((a,k)=>a+(cur[k]?.paid||0),0),tdeals=keys.reduce((a,k)=>a+(cur[k]?.deals||0),0);
+  const delta=(a,b)=>!b?"":`<span class="${a>=b?"up":"down"}">${a>=b?"+":"−"}${pct(Math.abs(a/b-1),0)}</span> vs ${y-1}`;
+  $("spSub").textContent=`· ${y} sponsorship year, invoiced · live from Insightly`;
+  const lv=o=>Object.entries(o.levels).sort((a,b)=>b[1]-a[1]).map(([l,n])=>`${esc(l.replace(/ \((AIA Canada|CCIF)\)/,""))} ${n}`).join(" · ");
+  $("spons").innerHTML=keys.map(k=>{const c=cur[k],p=prev[k];
+    return `<div class="sp-row" data-k="${esc(k)}"><div class="nm"><b>${esc(k)}</b><small>${c?`${fmt(c.deals)} sponsor${c.deals===1?"":"s"} · ${pct(c.invoiced?c.paid/c.invoiced:0,0)} paid`:`none recorded for ${y} yet`}</small></div>
+      <div class="tr"><span class="f" style="width:${(c?.invoiced||0)/mx*100}%"></span>${p?`<span class="ly" style="left:calc(${p.invoiced/mx*100}% - 1px)"></span>`:""}</div>
+      <div class="v">${c?money(c.invoiced):"–"}</div><div class="d muted">${c&&p?delta(c.invoiced,p.invoiced):p?`${money(p.invoiced)} in ${y-1}`:""}</div></div>${c?`<div class="sp-lv">${lv(c)}</div>`:""}`}).join("")+
+    `<div class="sp-row tot"><div class="nm"><b>All sponsorship</b><small>${fmt(tdeals)} sponsorships · ${money(tpaid)} paid</small></div><div></div><div class="v">${money(tc)}</div><div class="d muted">${delta(tc,tp)}</div></div>`;
+  $("spons").querySelectorAll(".sp-row[data-k]").forEach(row=>{const k=row.dataset.k,c=cur[k],p=prev[k];
+    row.addEventListener("mousemove",ev=>showTip(`<b>${esc(k)}</b>`+(c?`<div>${y}: <b>${money(c.invoiced)}</b> invoiced from ${fmt(c.deals)} sponsorships</div><div>${money(c.paid)} paid (${fmt(c.paid_deals)} invoices)</div>`:`<div>${y}: none recorded yet</div>`)+(p?`<div>${y-1}: ${money(p.invoiced)} from ${fmt(p.deals)}</div>`:""),ev.clientX,ev.clientY));row.addEventListener("mouseleave",hideTip)});
+  const missing=keys.filter(k=>prev[k]&&!cur[k]);
+  $("spNote").innerHTML=`From Insightly Sponsorship records, grouped by sponsorship year and event. CCIF combines the spring and fall forums; corporate partners are annual and not tied to one event.${missing.length?` <b>No ${y} sponsorships recorded yet for:</b> ${missing.map(esc).join(", ")}.`:""} Refreshed every 6 hours.`;
+}
+
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership()}
+function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes()}
 function watchJump(){
   // Highlight the last section whose top has scrolled past the jump bar.
   const links=[...document.querySelectorAll("#jump a:not(.totop)")];
@@ -1059,6 +1133,7 @@ async function boot(){
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
+    try{D.spons=await rest("sponsorship_totals","select=year,program,level,deals,invoiced,paid_deals,paid")}catch(e){D.spons=[]}
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
     try{const last=await rest("member_snap","select=as_of,year&order=as_of.desc&limit=1");
       if(last.length){const [snap,monthly]=await Promise.all([rest("member_snap",`select=metric,value&as_of=eq.${last[0].as_of}&dimension=eq.`),rest("member_monthly","select=period,metric,value&order=period")]);
