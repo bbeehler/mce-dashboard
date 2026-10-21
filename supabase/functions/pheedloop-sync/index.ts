@@ -52,7 +52,19 @@ async function moneyFor(code: string) {
   // Revenue = what registrants have been charged, tax included, less anything still owing. This matches the
   // revenue figures the team reported by hand (e.g. CCIF Montréal 2026: $112,504.74).
   const revenue = Math.round((sub + tax - due) * 100) / 100;
-  return { revenue, orders: regs.length, cancelled: regs.length - live.length, complete: live.filter((r: any) => r.registration_complete).length, sub_total: sub, tax_total: tax, payment_total: sum("payment_total"), refund_total: sum("refund_total", regs), amount_due: due, by_category: cats };
+  // Payment status per order (one order can cover several people):
+  //   paid = completed and charged, nothing owing; free = completed at no charge (speakers, comps, free tickets);
+  //   owing = completed but money still due (e.g. pay by invoice); incomplete = started but never finished.
+  const st = { paid: 0, free: 0, owing: 0, incomplete: 0, owingAmount: 0 };
+  for (const r of live) {
+    const due = n(r.amount_due), charged = n(r.sub_total) + n(r.tax_total);
+    if (!r.registration_complete) st.incomplete++;
+    else if (due > 0.005) { st.owing++; st.owingAmount += due; }
+    else if (charged > 0.005) st.paid++;
+    else st.free++;
+  }
+  st.owingAmount = Math.round(st.owingAmount * 100) / 100;
+  return { revenue, status: st, orders: regs.length, cancelled: regs.length - live.length, complete: live.filter((r: any) => r.registration_complete).length, sub_total: sub, tax_total: tax, payment_total: sum("payment_total"), refund_total: sum("refund_total", regs), amount_due: due, by_category: cats };
 }
 const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
 const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : typeof n === "string" && n.trim() !== "" && Number.isFinite(+n) ? +n : null);
@@ -74,6 +86,11 @@ Deno.serve(async (req) => {
     const backfillFrom = `${started.getUTCFullYear() - 1}-01-01`;
     const { data: known } = await db.from("events").select("code");
     const have = new Set((known ?? []).map((r: any) => r.code));
+    // Events held earlier this year get their payment status filled in once (only the status columns change).
+    const { data: withStatus } = await db.from("event_snapshots").select("event_code").not("orders", "is", null);
+    const hasStatus = new Set((withStatus ?? []).map((r: any) => r.event_code));
+    const yearStart = `${started.getUTCFullYear()}-01-01`;
+    let statusFilled = 0;
     let written = 0, counted = 0, backfilled = 0;
     const kept: string[] = [];
     for (const e of events) {
@@ -83,6 +100,16 @@ Deno.serve(async (req) => {
       if (!code || !start) continue;
       if (/\btest(ing)?\b/i.test(String(e.event_name ?? e.name ?? ""))) continue; // skip PheedLoop test events
       const old = (end ?? start) < cutoff;
+      if (old && have.has(code) && !hasStatus.has(code) && (end ?? start) >= yearStart) {
+        try {
+          const m = await moneyFor(code), liveOrders = m.orders - m.cancelled;
+          if (liveOrders > 0) {
+            const { data: rows } = await db.from("event_snapshots").select("period").eq("event_code", code).order("period", { ascending: false }).limit(1);
+            if (rows?.length) { await db.from("event_snapshots").update({ orders: liveOrders, orders_paid: m.status.paid, orders_free: m.status.free, orders_owing: m.status.owing, orders_incomplete: m.status.incomplete, amount_owing: m.status.owingAmount }).eq("event_code", code).eq("period", rows[0].period); statusFilled++; }
+          }
+        } catch { /* status is optional */ }
+        continue;
+      }
       if (old && ((end ?? start) < backfillFrom || have.has(code))) continue;
 
       let regs = num(e.total_registration_count);
@@ -92,8 +119,8 @@ Deno.serve(async (req) => {
         try { const a = await pl(`/events/${code}/attendance/`); attendance = Array.isArray(a?.checked_in) ? a.checked_in.length : null; } catch { /* attendance is optional */ }
       }
 
-      let revenue: number | null = null;
-      try { const m = await moneyFor(code); if (m.revenue > 0) revenue = m.revenue; } catch { /* revenue is optional */ }
+      let revenue: number | null = null, status: any = null, liveOrders = 0;
+      try { const m = await moneyFor(code); if (m.revenue > 0) revenue = m.revenue; status = m.status; liveOrders = m.orders - m.cancelled; } catch { /* revenue is optional */ }
 
       const ev: Record<string, unknown> = { code, name: String(e.event_name ?? e.name ?? code).trim(), start_date: start, end_date: end };
       const cap = num(e.attendee_registration_capacity);
@@ -105,11 +132,12 @@ Deno.serve(async (req) => {
       const snap: Record<string, unknown> = { event_code: code, period: old ? `${endDay.slice(0, 7)}-01` : period, registrations: regs };
       if (attendance != null && attendance > 0) snap.attendance = attendance;
       if (revenue != null) snap.revenue = revenue;
+      if (status && liveOrders > 0) Object.assign(snap, { orders: liveOrders, orders_paid: status.paid, orders_free: status.free, orders_owing: status.owing, orders_incomplete: status.incomplete, amount_owing: status.owingAmount });
       const { error: e2 } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
       if (e2) throw new Error(`snapshot ${code}: ${e2.message}`);
       written++; kept.push(code); if (old) backfilled++;
     }
-    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: [counted ? `${counted} counted from attendee lists` : "", backfilled ? `${backfilled} past events added` : ""].filter(Boolean).join("; ") || null });
+    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: [counted ? `${counted} counted from attendee lists` : "", backfilled ? `${backfilled} past events added` : "", statusFilled ? `payment status filled for ${statusFilled} past events` : ""].filter(Boolean).join("; ") || null });
     await db.from("sync_log").insert(log);
     return json({ ok: true, period, events_seen: events.length, events_written: written, codes: kept });
   } catch (err) {

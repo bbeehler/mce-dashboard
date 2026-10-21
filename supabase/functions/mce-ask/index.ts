@@ -113,7 +113,7 @@ async function buildBrief() {
     all("metric_values", "period,source,metric,dimension,value", (q) => q.eq("brand", "All").gte("period", since).not("metric", "like", "%_ytd")),
     all("targets", "year,stream,source,metric,dimension,target,better"),
     all("events", "code,name,start_date,end_date,capacity,target_registrations,target_revenue,prior_code,merged_into,attendance_manual"),
-    all("event_snapshots", "event_code,period,registrations,revenue,attendance"),
+    all("event_snapshots", "event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing"),
   ]);
 
   // Monthly tables per source: rows = metric (· dimension), columns = months.
@@ -159,12 +159,14 @@ async function buildBrief() {
   const alias: Record<string, string> = {};
   for (const e of events) if (e.merged_into) alias[e.merged_into] = alias[e.merged_into] ?? e.code;
   const real = events.filter((e) => !e.merged_into && !/\btest(ing)?\b/i.test(e.name ?? ""));
-  lines.push(`\n## Events (registrations from PheedLoop; month-end snapshots)\nname | short code | start | capacity | target regs | target revenue | last year's code | registrations by month-end | latest revenue | attendance`);
+  lines.push(`\n## Events (registrations from PheedLoop; month-end snapshots)\nname | short code | start | capacity | target regs | target revenue | last year's code | registrations by month-end | latest revenue | attendance | payment status (orders: paid / complimentary / owing (amount) / incomplete = started but not finished)`);
   for (const e of real.sort((a, b) => a.start_date.localeCompare(b.start_date))) {
     const ss = snaps.filter((s) => s.event_code === e.code).sort((a, b) => a.period.localeCompare(b.period));
     const rev = [...ss].reverse().find((s) => s.revenue != null && Number(s.revenue) > 0);
     const att = [...ss].reverse().find((s) => s.attendance != null);
-    lines.push(`${e.name} | ${alias[e.code] ?? ""} | ${e.start_date}${e.end_date && e.end_date !== e.start_date ? "–" + e.end_date : ""} | ${e.capacity ?? ""} | ${e.target_registrations ?? ""} | ${e.target_revenue ?? ""} | ${e.prior_code ?? ""} | ${ss.map((s) => `${s.period.slice(0, 7)}:${s.registrations}`).join(", ")} | ${rev ? Math.round(Number(rev.revenue)) : ""} | ${e.attendance_manual ?? (att ? att.attendance : "")}`);
+    const ps = [...ss].reverse().find((s) => s.orders != null);
+    const pay = ps ? `${ps.orders_paid} paid / ${ps.orders_free} comp / ${ps.orders_owing} owing ($${Math.round(Number(ps.amount_owing ?? 0))}) / ${ps.orders_incomplete} incomplete` : "";
+    lines.push(`${e.name} | ${alias[e.code] ?? ""} | ${e.start_date}${e.end_date && e.end_date !== e.start_date ? "–" + e.end_date : ""} | ${e.capacity ?? ""} | ${e.target_registrations ?? ""} | ${e.target_revenue ?? ""} | ${e.prior_code ?? ""} | ${ss.map((s) => `${s.period.slice(0, 7)}:${s.registrations}`).join(", ")} | ${rev ? Math.round(Number(rev.revenue)) : ""} | ${e.attendance_manual ?? (att ? att.attendance : "")} | ${pay}`);
   }
 
   if (targets.length) {

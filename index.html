@@ -249,6 +249,13 @@ html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;paddin
 #briefBody{font-size:14.5px;line-height:1.55;max-width:860px}
 #briefBody h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:14px 0 4px}
 #briefBody ul{margin:4px 0 8px;padding-left:20px}#briefBody li{margin:0 0 4px}#briefBody p{margin:0 0 8px}
+.paybar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--grid);min-width:90px;margin-top:4px}
+.paybar i{display:block;height:100%}
+.paybar .pd{background:var(--s1)}.paybar .fr{background:color-mix(in srgb,var(--s1) 35%,var(--grid))}.paybar .ow{background:var(--serious)}.paybar .ic{background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)}
+.paytxt{font-size:12px;color:var(--ink-2);white-space:nowrap}.paytxt b.ow{color:color-mix(in srgb,var(--serious) 70%,var(--ink))}
+.paysum{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:13px;color:var(--ink-2);margin:0 0 12px}
+.paysum .k{display:inline-flex;align-items:center;gap:6px}.paysum .k i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.paysum b{color:var(--ink)}
 .spons{display:grid;gap:10px}
 .sp-row{display:grid;grid-template-columns:minmax(150px,26%) 1fr 92px 70px;gap:12px;align-items:center;font-size:13px}
 .sp-row .nm b{display:block;color:var(--ink)}.sp-row .nm small{color:var(--muted);font-size:11.5px}
@@ -379,7 +386,7 @@ html{scroll-behavior:smooth}
 
   <section class="stream" id="engagement" aria-labelledby="enH">
     <div class="sec-head"><h2 id="enH">Engagement</h2><span class="sub-h" id="evLive">Events, live from PheedLoop</span></div>
-    <div class="card"><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
+    <div class="card"><div class="paysum" id="evPay"></div><div class="tblwrap"><table id="evTable"></table></div><p class="note" id="evNote"></p></div>
     <div class="card" id="sponsCard"><h3>Sponsorship revenue by event <span class="sub" id="spSub"></span></h3><div class="spons" id="spons"></div>
       <div class="legend"><span><i class="sw" style="--c:var(--s1)"></i>Invoiced this year</span><span><i style="--c:var(--ink-2);width:2px;height:12px;border-radius:1px"></i>Last year, same event</span></div><p class="note" id="spNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
@@ -969,7 +976,7 @@ function renderEvents(){
   const p=LIVE_PERIOD,evs=liveEvents();
   $("evLive").textContent=D.sync?`Events, live from PheedLoop · updated ${agoText(D.sync.finished_at||D.sync.started_at)}`:"Events, from PheedLoop · not connected yet";
   if(!evs.length){$("evTable").innerHTML=`<tbody><tr><td class="empty-note">${D.sync?"No upcoming or recent events in PheedLoop.":"Registrations appear here once the PheedLoop connection is switched on."}</td></tr></tbody>`;$("evNote").textContent="";return}
-  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month so far</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`;
+  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month so far</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Payment</th><th>Status</th></tr></thead><tbody>`;
   evs.forEach((e,i)=>{
     const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
     const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
@@ -980,10 +987,14 @@ function renderEvents(){
       <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
       <td class="num">${lyd==null?'<span style="color:var(--muted)">–</span>':`<span class="${lyd>=0?"up":"down"}">${lyd>=0?"+":""}${pct(lyd,0)}</span>`}</td>
       <td class="num">${e.revenue==null?"–":money(e.revenue)}${e.target_revenue?`<div class="evmeta">of ${money(e.target_revenue)}${e.revAsOf?` · end of ${mLabel(e.revAsOf,{month:"short"})}`:""}</div>`:(e.revAsOf?`<div class="evmeta">end of ${mLabel(e.revAsOf,{month:"short"})}</div>`:"")}</td>
+      <td>${payCell(e.code)}</td>
       <td>${pill(e.st.kind,e.st.label)}</td></tr>
-      <tr class="detail" hidden data-d="${i}"><td colspan="7"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
+      <tr class="detail" hidden data-d="${i}"><td colspan="8"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
   });
-  $("evTable").innerHTML=h+"</tbody>";
+  $("evTable").innerHTML=h+"</tbody>";payTips($("evTable"));
+  // Summary across the upcoming and recent events in the table.
+  const ps=evs.map(e=>payOf(e.code)).filter(Boolean),S=k=>ps.reduce((a,p)=>a+p[k],0);
+  $("evPay").innerHTML=ps.length?`<span><b>${fmt(S("owing"))}</b> order${S("owing")===1?"":"s"} owing <b>${money(S("owed"))}</b></span><span><b>${fmt(S("inc"))}</b> incomplete registration${S("inc")===1?"":"s"}</span><span>${fmt(S("paid"))} paid · ${fmt(S("free"))} complimentary</span><span style="flex:1"></span>${PAY_LEGEND}`:"";
   $("evNote").textContent="Registrations update every hour from PheedLoop and don't change with the month picker. Click an event for its month-end registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target.";
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
     const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
@@ -998,15 +1009,29 @@ function renderEvents(){
   });
 }
 
+/* ---------- registration payment status (PheedLoop orders) ---------- */
+// Latest snapshot with order status for an event: paid, complimentary, owing (completed, money still due),
+// incomplete (started, never finished). Counted per order; one order can cover several people.
+function payOf(code){const s=D.snaps.filter(x=>x.event_code===code&&x.orders!=null).sort((a,b)=>b.period.localeCompare(a.period))[0];
+  return s?{orders:s.orders,paid:s.orders_paid||0,free:s.orders_free||0,owing:s.orders_owing||0,inc:s.orders_incomplete||0,owed:Number(s.amount_owing||0)}:null}
+function payCell(code){const p=payOf(code);if(!p)return '<span style="color:var(--muted)">–</span>';
+  const w=v=>p.orders?v/p.orders*100:0;
+  const txt=[p.owing?`<b class="ow">${fmt(p.owing)} owing</b>`:"",p.inc?`${fmt(p.inc)} incomplete`:""].filter(Boolean).join(" · ")||`${fmt(p.paid+p.free)} of ${fmt(p.orders)} settled`;
+  return `<div class="paycell" data-pay="${esc(code)}"><div class="paytxt">${txt}</div><div class="paybar" aria-hidden="true"><i class="pd" style="width:${w(p.paid)}%"></i><i class="fr" style="width:${w(p.free)}%"></i><i class="ow" style="width:${w(p.owing)}%"></i><i class="ic" style="width:${w(p.inc)}%"></i></div></div>`}
+function payTips(host){host.querySelectorAll("[data-pay]").forEach(el=>{const p=payOf(el.dataset.pay);if(!p)return;
+  el.addEventListener("mousemove",ev=>{ev.stopPropagation();showTip(`<b>Registration orders: ${fmt(p.orders)}</b><div>${fmt(p.paid)} paid</div><div>${fmt(p.free)} complimentary (no charge)</div><div>${fmt(p.owing)} owing${p.owing?` · ${money(p.owed)}`:""}</div><div>${fmt(p.inc)} incomplete (started, not finished)</div>`,ev.clientX,ev.clientY)});
+  el.addEventListener("mouseleave",hideTip)})}
+const PAY_LEGEND='<span class="k"><i style="background:var(--s1)"></i>Paid</span><span class="k"><i style="background:color-mix(in srgb,var(--s1) 35%,var(--grid))"></i>Complimentary</span><span class="k"><i style="background:var(--serious)"></i>Owing</span><span class="k"><i style="background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)"></i>Incomplete</span>';
+
 // Every event in the selected year (held and upcoming) with the numbers the targets count.
 function renderYearEvents(){
   const y=+state.month.slice(0,4),evs=yearEvents(y).sort((a,b)=>a.start_date.localeCompare(b.start_date));
   $("yrEvH").innerHTML=`Every event in ${y} <span class="sub">· the numbers the event targets count</span>`;
   if(!evs.length){$("yrEvTable").innerHTML=`<tbody><tr><td class="empty-note">No events found for ${y}.</td></tr></tbody>`;$("yrEvNote").textContent="";return}
   const tot=k=>evs.reduce((a,e)=>a+(e[k]||0),0),cell=(v,f)=>v==null||v===0&&f!=="r"?'<span style="color:var(--muted)">–</span>':f==="m"?money(v):fmt(v);
-  $("yrEvTable").innerHTML=`<thead><tr><th>Event</th><th>Date</th><th>Code</th><th class="num">Registrations</th><th class="num">Attendance</th><th class="num">Revenue</th><th>Status</th></tr></thead><tbody>`+
-    evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
-    `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td></td></tr></tbody>`;
+  $("yrEvTable").innerHTML=`<thead><tr><th>Event</th><th>Date</th><th>Code</th><th class="num">Registrations</th><th class="num">Attendance</th><th class="num">Revenue</th><th>Payment</th><th>Status</th></tr></thead><tbody>`+
+    evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td>${payCell(e.code)}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
+    `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td></td><td></td></tr></tbody>`;payTips($("yrEvTable"));
   const noRev=evs.filter(e=>e.held&&!e.rev),noAtt=evs.filter(e=>e.held&&!e.att);
   $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so attendance can be entered on the <a href="upload.html#attendanceCard">Upload month page</a>.${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
 }
@@ -1148,7 +1173,7 @@ function watchJump(){
 function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view==="ytd")u.searchParams.set("view","ytd");else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
-    const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance")]);
+    const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing")]);
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{D.spons=await rest("sponsorship_totals","select=year,program,level,deals,invoiced,paid_deals,paid")}catch(e){D.spons=[]}
