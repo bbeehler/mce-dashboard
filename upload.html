@@ -198,6 +198,14 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div id="liMsg"></div>
   </section>
 
+  <section class="card" id="metaCard" hidden>
+    <h2>10. Facebook &amp; Instagram connection</h2>
+    <p>Connect AIA Canada's Facebook Pages once and the dashboard reads their statistics every morning, along with any Instagram business account linked to them: followers, views, engagements, page views, link taps and posts. It is read-only: the dashboard can't post or change anything. Sign in with a Facebook account that has full control of the Pages, and tick every Page you want counted. Once connected, the Facebook and Instagram rows in the monthly template are no longer needed, except Facebook link clicks, which Meta no longer reports for a whole Page.</p>
+    <div id="mtStatus" class="muted">Checking…</div>
+    <div class="row" style="margin-top:10px"><button id="mtConnect" type="button">Connect Facebook &amp; Instagram</button><span class="muted" id="mtHint"></span></div>
+    <div id="mtMsg"></div>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -250,7 +258,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;$("briefCard").hidden=!on;$("linkedinCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes();loadBrief();loadLinkedIn()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;$("briefCard").hidden=!on;$("linkedinCard").hidden=!on;$("metaCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes();loadBrief();loadLinkedIn();loadMeta()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -356,7 +364,7 @@ $("save").onclick=async()=>{
     const metrics=parsed.metrics.map(({_label,_tab,brand,...m})=>m);
     const targets=parsed.targets.map(({_label,_unit,...t})=>t);
     const r=await call("save",{period,metrics,events:parsed.events,targets,filename:parsed.filename});existing=null;
-    msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them. Claude is now writing the ${monthLabel(period)} brief; it will appear under <a href="#briefCard">Monthly brief</a> in about a minute.${r.skipped_linkedin?` The ${r.skipped_linkedin} LinkedIn numbers in the file were skipped because LinkedIn is connected and supplies them directly.`:""}`);
+    msg("saveMsg","ok",`Saved ${fmt(r.saved)} numbers for ${monthLabel(period)}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a> to see them. Claude is now writing the ${monthLabel(period)} brief; it will appear under <a href="#briefCard">Monthly brief</a> in about a minute.${r.skipped_linkedin?` The ${r.skipped_linkedin} LinkedIn numbers in the file were skipped because LinkedIn is connected and supplies them directly.`:""}${r.skipped_meta?` The ${r.skipped_meta} Facebook and Instagram numbers in the file were skipped because they're connected and supplied directly.`:""}`);
     generateBrief(period,true);
     loadHistory();
   }catch(err){
@@ -601,6 +609,24 @@ async function loadLinkedIn(){
 }
 $("liConnect").onclick=async()=>{$("liConnect").disabled=true;msg("liMsg","warn","Opening LinkedIn…");
   try{const r=await liCall("start");location.href=r.url}catch(e){msg("liMsg","err",esc(e.message));$("liConnect").disabled=false}};
+
+/* ---------- Facebook & Instagram connection ---------- */
+const MT_FN="https://cyeirmvdstdhcbuyghvv.supabase.co/functions/v1/meta-auth";
+async function mtCall(action){const r=await fetch(MT_FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,passcode})});
+  const j=await r.json().catch(()=>({error:"The Facebook service didn't answer properly."}));if(!r.ok||j.error)throw Object.assign(new Error(j.error||`Error ${r.status}`),{status:r.status});return j}
+async function loadMeta(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("meta")==="connected")msg("mtMsg","ok","Facebook is connected. The first numbers are being read now and appear on the dashboard within a few minutes.");
+  if(q.get("meta")==="error")msg("mtMsg","err",`Facebook didn't connect: ${esc(q.get("msg")||"unknown error")}.`);
+  let s;try{s=await mtCall("status")}catch(e){$("mtStatus").innerHTML=`<span class="pill warn">Not available</span> ${esc(e.message)}`;$("mtConnect").disabled=true;return}
+  if(!s.connected){$("mtStatus").innerHTML=`<span class="pill">Not connected</span>`;$("mtConnect").textContent="Connect Facebook & Instagram";$("mtHint").textContent="";return}
+  const list=s.pages.map(p=>esc(p.name)+(p.ig?` (Instagram @${esc(p.ig)})`:"")).join(", ");
+  const last=s.last?(s.last.ok?`Last read ${new Date(s.last.finished_at||s.last.started_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}: ${esc(s.last.note||"")}.`:`<b>Last read failed:</b> ${esc(s.last.note||"")}`):"Waiting for the first read.";
+  $("mtStatus").innerHTML=`<span class="pill ok">Connected</span> Since ${dshort(s.connected_at)}. Pages: ${list}. ${last}`;
+  $("mtConnect").textContent="Reconnect Facebook & Instagram";$("mtHint").textContent="Only needed to add a Page, or if the reads start failing.";
+}
+$("mtConnect").onclick=async()=>{$("mtConnect").disabled=true;msg("mtMsg","warn","Opening Facebook…");
+  try{const r=await mtCall("start");location.href=r.url}catch(e){msg("mtMsg","err",esc(e.message));$("mtConnect").disabled=false}};
 
 async function loadHistory(){
   let data;try{data=(await call("history")).uploads}catch(e){$("history").textContent="Upload history isn't available right now.";return}

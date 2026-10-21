@@ -170,6 +170,16 @@ Deno.serve(async (req) => {
     for (let i = metrics.length - 1; i >= 0; i--) if (metrics[i].source === "social" && metrics[i].dimension === "LinkedIn") metrics.splice(i, 1);
     skippedLinkedIn = before - metrics.length;
   }
+  // Same for Facebook and Instagram once the Pages are connected. Meta no longer reports link clicks for a whole
+  // Page, so the Facebook link clicks row from the template is still saved.
+  let skippedMeta = 0;
+  const { data: mt } = await db.from("app_settings").select("key,value").in("key", ["meta_pages", "meta_since"]);
+  const mtOn = (mt ?? []).some((r: any) => r.key === "meta_pages"), mtSince = (mt ?? []).find((r: any) => r.key === "meta_since")?.value;
+  if (mtOn && mtSince && period >= mtSince) {
+    const before = metrics.length;
+    for (let i = metrics.length - 1; i >= 0; i--) if (metrics[i].source === "social" && (metrics[i].dimension === "Instagram" || (metrics[i].dimension === "Facebook" && metrics[i].metric !== "link_clicks"))) metrics.splice(i, 1);
+    skippedMeta = before - metrics.length;
+  }
   if (metrics.length) {
     const rows = metrics.map((m: any) => ({ period, stream: m.stream, source: m.source, brand: "All", metric: m.metric, dimension: typeof m.dimension === "string" ? m.dimension : "", value: m.value, updated_by: "upload page" }));
     const { error } = await db.from("metric_values").upsert(rows, { onConflict: "period,source,brand,metric,dimension" });
@@ -211,5 +221,5 @@ Deno.serve(async (req) => {
     }
   }
   await db.from("uploads").insert({ period, uploaded_by: "upload page", filename: typeof filename === "string" ? filename.slice(0, 200) : null, rows_written: metrics.length + events.length + targets.length });
-  return json({ ok: true, saved: metrics.length + events.length + targets.length, skipped_linkedin: skippedLinkedIn }, 200, h);
+  return json({ ok: true, saved: metrics.length + events.length + targets.length, skipped_linkedin: skippedLinkedIn, skipped_meta: skippedMeta }, 200, h);
 });
