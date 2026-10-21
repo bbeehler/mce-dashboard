@@ -160,6 +160,16 @@ Deno.serve(async (req) => {
   if (problems.length) return json({ error: problems.slice(0, 10).join(" ") }, 400, h);
 
   // ---- save ----
+  // Once LinkedIn is connected, its numbers come from the LinkedIn sync, so uploaded LinkedIn rows are skipped
+  // from the connection month on.
+  let skippedLinkedIn = 0;
+  const { data: li } = await db.from("app_settings").select("key,value").in("key", ["linkedin_access_token", "linkedin_since"]);
+  const liOn = (li ?? []).some((r: any) => r.key === "linkedin_access_token"), liSince = (li ?? []).find((r: any) => r.key === "linkedin_since")?.value;
+  if (liOn && liSince && period >= liSince) {
+    const before = metrics.length;
+    for (let i = metrics.length - 1; i >= 0; i--) if (metrics[i].source === "social" && metrics[i].dimension === "LinkedIn") metrics.splice(i, 1);
+    skippedLinkedIn = before - metrics.length;
+  }
   if (metrics.length) {
     const rows = metrics.map((m: any) => ({ period, stream: m.stream, source: m.source, brand: "All", metric: m.metric, dimension: typeof m.dimension === "string" ? m.dimension : "", value: m.value, updated_by: "upload page" }));
     const { error } = await db.from("metric_values").upsert(rows, { onConflict: "period,source,brand,metric,dimension" });
@@ -201,5 +211,5 @@ Deno.serve(async (req) => {
     }
   }
   await db.from("uploads").insert({ period, uploaded_by: "upload page", filename: typeof filename === "string" ? filename.slice(0, 200) : null, rows_written: metrics.length + events.length + targets.length });
-  return json({ ok: true, saved: metrics.length + events.length + targets.length }, 200, h);
+  return json({ ok: true, saved: metrics.length + events.length + targets.length, skipped_linkedin: skippedLinkedIn }, 200, h);
 });
