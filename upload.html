@@ -150,16 +150,11 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
 
   <section class="card" id="sentimentCard" hidden>
     <h2>6. Monthly sentiment</h2>
-    <p>Enter the month's positive, neutral and negative mentions from your social listening or scheduling tool. Counts or percentages both work. The dashboard turns them into a <b>net sentiment score</b> from −100 (all negative) to +100 (all positive): positive minus negative, as a share of all mentions.</p>
-    <div class="row"><label for="snMonth">Month</label><input id="snMonth" type="month"></div>
-    <div class="sn-grid">
-      <label>Positive<span class="tin"><input id="snPos" inputmode="decimal" aria-label="Positive mentions"></span></label>
-      <label>Neutral<span class="tin"><input id="snNeu" inputmode="decimal" aria-label="Neutral mentions"></span></label>
-      <label>Negative<span class="tin"><input id="snNeg" inputmode="decimal" aria-label="Negative mentions"></span></label>
-      <div class="sn-score"><span class="muted">Net sentiment</span><b id="snScore">–</b><span id="snMix" class="muted"></span></div>
-    </div>
+    <p>Sentiment now comes straight from the <b>media monitoring tool</b>, every morning: mentions published that month, leaving out those triaged as noise (mixed counts as neutral). The dashboard turns them into a <b>net sentiment score</b> from −100 (all negative) to +100 (all positive): positive minus negative, as a share of all mentions. Nothing to type here except, if you like, a line on what drove the month.</p>
+    <div id="snStatus" class="muted"></div>
+    <div class="row" style="margin-top:10px"><label for="snMonth">Month</label><input id="snMonth" type="month"><span class="muted" id="snHint"></span></div>
     <label class="sn-note">What drove it? <span class="muted">(optional, shown on the dashboard)</span><textarea id="snNote" rows="2" maxlength="1000" placeholder="e.g. Praise for CCIF Montréal speakers; complaints about registration fees"></textarea></label>
-    <div class="row"><button id="snSave" type="button">Save sentiment</button><span class="muted" id="snHint"></span></div>
+    <div class="row"><button id="snSave" type="button">Save note</button></div>
     <div id="snMsg"></div>
     <div class="tbl" style="margin-top:12px"><table id="snHist"></table></div>
   </section>
@@ -485,36 +480,27 @@ $("atSave").onclick=async()=>{
   catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("atMsg","err",`Not saved: ${esc(err.message)}`);$("atSave").disabled=false}
 };
 
-/* ---------- monthly sentiment ---------- */
+/* ---------- monthly sentiment (from the media monitoring tool) ---------- */
 let snRows={},snNotes={};
-const snNum=v=>{const t=String(v??"").trim().replace(/[,%\s]/g,"");if(t==="")return null;const n=Number(t);return Number.isFinite(n)&&n>=0?n:NaN};
 const netOf=(p,u,n)=>{const t=p+u+n;return t>0?Math.round((p-n)/t*100):null};
-function snPreview(){const p=snNum($("snPos").value),u=snNum($("snNeu").value),n=snNum($("snNeg").value);
-  if([p,u,n].some(x=>x==null||Number.isNaN(x))){$("snScore").textContent="–";$("snMix").textContent=[p,u,n].some(Number.isNaN)?"Use numbers only":"";return}
-  const s=netOf(p,u,n),t=p+u+n;$("snScore").textContent=s==null?"–":(s>0?"+":"")+s;$("snMix").textContent=t?`${Math.round(p/t*100)}% positive · ${Math.round(u/t*100)}% neutral · ${Math.round(n/t*100)}% negative`:""}
-function snFill(){const m=$("snMonth").value+"-01",r=snRows[m];
-  $("snPos").value=r?.sent_positive??"";$("snNeu").value=r?.sent_neutral??"";$("snNeg").value=r?.sent_negative??"";$("snNote").value=snNotes[m]??"";
-  $("snHint").textContent=r?`${monthLabel(m)} already has a score; saving replaces it.`:"";snPreview()}
+function snFill(){const m=$("snMonth").value+"-01",r=snRows[m];$("snNote").value=snNotes[m]??"";
+  $("snHint").textContent=r?`${fmt(r.sent_positive)} positive · ${fmt(r.sent_neutral)} neutral · ${fmt(r.sent_negative)} negative`:"No mentions for this month yet."}
 async function loadSentiment(){
   if(!$("snMonth").value){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);$("snMonth").value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
-  try{const [vals,notes]=await Promise.all([sbGet("metric_values?select=period,metric,value&source=eq.sentiment&order=period.desc"),sbGet("month_notes?select=period,note&topic=eq.sentiment")]);
-    snRows={};vals.forEach(v=>{(snRows[v.period]??={})[v.metric]=Number(v.value)});snNotes={};notes.forEach(n=>snNotes[n.period]=n.note)}catch(e){snRows={};snNotes={}}
+  let last=null;
+  try{const [vals,notes,lg]=await Promise.all([sbGet("metric_values?select=period,metric,value&source=eq.sentiment&dimension=eq.&order=period.desc"),sbGet("month_notes?select=period,note&topic=eq.sentiment"),sbGet("sync_log?select=started_at,finished_at,ok,note&source=eq.sentiment&order=started_at.desc&limit=1").catch(()=>[])]);
+    snRows={};vals.forEach(v=>{(snRows[v.period]??={})[v.metric]=Number(v.value)});snNotes={};notes.forEach(n=>snNotes[n.period]=n.note);last=lg[0]||null}catch(e){snRows={};snNotes={}}
+  $("snStatus").innerHTML=last?(last.ok?`<span class="pill ok">Connected</span> Last read ${new Date(last.finished_at||last.started_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}: ${esc(last.note||"")}.`:`<span class="pill warn">Last read failed</span> ${esc(last.note||"")}`):`<span class="pill">Waiting for the first read</span>`;
   const ms=Object.keys(snRows).sort().reverse().slice(0,12);
-  $("snHist").innerHTML=ms.length?`<thead><tr><th>Month</th><th style="text-align:right">Positive</th><th style="text-align:right">Neutral</th><th style="text-align:right">Negative</th><th style="text-align:right">Net score</th></tr></thead><tbody>${ms.map(m=>{const r=snRows[m],s=netOf(r.sent_positive||0,r.sent_neutral||0,r.sent_negative||0);return `<tr><td>${monthLabel(m)}</td><td class="n">${fmt(r.sent_positive)}</td><td class="n">${fmt(r.sent_neutral)}</td><td class="n">${fmt(r.sent_negative)}</td><td class="n"><b>${s==null?"–":(s>0?"+":"")+s}</b></td></tr>`}).join("")}</tbody>`:'<tbody><tr><td class="muted">No sentiment entered yet.</td></tr></tbody>';
+  $("snHist").innerHTML=ms.length?`<thead><tr><th>Month</th><th style="text-align:right">Mentions</th><th style="text-align:right">Positive</th><th style="text-align:right">Neutral</th><th style="text-align:right">Negative</th><th style="text-align:right">Net score</th></tr></thead><tbody>${ms.map(m=>{const r=snRows[m],s=netOf(r.sent_positive||0,r.sent_neutral||0,r.sent_negative||0);return `<tr><td>${monthLabel(m)}</td><td class="n">${fmt(r.sent_mentions??((r.sent_positive||0)+(r.sent_neutral||0)+(r.sent_negative||0)))}</td><td class="n">${fmt(r.sent_positive)}</td><td class="n">${fmt(r.sent_neutral)}</td><td class="n">${fmt(r.sent_negative)}</td><td class="n"><b>${s==null?"–":(s>0?"+":"")+s}</b></td></tr>`}).join("")}</tbody>`:'<tbody><tr><td class="muted">No sentiment read yet.</td></tr></tbody>';
   snFill();
 }
-["snPos","snNeu","snNeg"].forEach(id=>$(id).addEventListener("input",snPreview));
 $("snMonth").addEventListener("input",snFill);
 $("snSave").onclick=async()=>{
-  const period=$("snMonth").value+"-01",p=snNum($("snPos").value),u=snNum($("snNeu").value),n=snNum($("snNeg").value);
   if(!$("snMonth").value){msg("snMsg","err","Choose the month.");return}
-  const blank=[p,u,n].every(x=>x==null);
-  if(!blank&&[p,u,n].some(x=>x==null||Number.isNaN(x))){msg("snMsg","err","Fill in positive, neutral and negative with numbers (use 0 if there were none).");return}
-  if(blank&&!snRows[period]){msg("snMsg","err","Enter positive, neutral and negative for the month.");return}
-  if(blank&&!confirm(`Clear the sentiment score for ${monthLabel(period)}?`))return;
+  const period=$("snMonth").value+"-01",note=$("snNote").value.trim()||null;
   $("snSave").disabled=true;msg("snMsg","warn","Saving…");
-  try{await call("sentiment",{period,positive:blank?null:p,neutral:blank?null:u,negative:blank?null:n,note:$("snNote").value.trim()||null});
-    await loadSentiment();msg("snMsg","ok",blank?`Cleared ${monthLabel(period)}.`:`Saved sentiment for ${monthLabel(period)}: net score ${(()=>{const s=netOf(p,u,n);return (s>0?"+":"")+s})()}. <a href="./?month=${period.slice(0,7)}">Open the dashboard</a>.`)}
+  try{await call("sentiment_note",{period,note});await loadSentiment();msg("snMsg","ok",note?`Saved the note for ${monthLabel(period)}.`:`Removed the note for ${monthLabel(period)}.`)}
   catch(err){if(err.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("snMsg","err",`Not saved: ${esc(err.message)}`)}
   $("snSave").disabled=false;
 };

@@ -319,6 +319,7 @@ html{scroll-behavior:smooth}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px;vertical-align:middle}
 .src.link{text-decoration:none;border-style:dashed;color:var(--s1)}
 .muted{color:var(--muted)}
+.sbreak{margin-top:10px;font-size:13px;display:grid;gap:6px}.sbreak>div{display:grid;grid-template-columns:88px 1fr;gap:8px;align-items:baseline}.sbreak>div>b{color:var(--ink-2);font-weight:600}.sbreak .its{display:flex;flex-wrap:wrap;gap:2px 14px}
 </style>
 </head>
 <body id="top">
@@ -752,17 +753,29 @@ function netChart(host,months,vals,win,notes){
     hit.addEventListener("mouseleave",hideTip)});
   noteMarks(svg,{notes},i=>m.l+band*i+band/2,m.t,m.t+ih);
 }
+// Brand split and top themes for the months shown, from the media monitoring tool.
+const SENT_BRANDS=["AIA Canada","YPA","CCIF","I-CAR Canada"];
+function sentBreak(win){
+  const rows=D.metrics.filter(m=>m.source==="sentiment"&&win.has(m.period));
+  const sum=(metric,dim)=>rows.filter(m=>m.metric===metric&&m.dimension===dim).reduce((a,m)=>a+Number(m.value),0);
+  const br=SENT_BRANDS.map(b=>{const p=sum("sent_positive",b),u=sum("sent_neutral",b),n=sum("sent_negative",b),t=p+u+n;return{b,t,s:t?(p-n)/t:null}}).filter(x=>x.t>0);
+  const th={};rows.filter(m=>m.metric==="sent_theme").forEach(m=>th[m.dimension]=(th[m.dimension]||0)+Number(m.value));
+  const top=Object.entries(th).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  if(!br.length&&!top.length)return"";
+  return `<div class="sbreak">${br.length?`<div><b>By brand</b><span class="its">${br.map(x=>`<span>${esc(x.b)} <b>${sentFmt(x.s)}</b> <span class="muted">(${fmt(x.t)})</span></span>`).join("")}</span></div>`:""}${top.length?`<div><b>Top themes</b><span class="its">${top.map(([t,c])=>`<span>${esc(t)} <span class="muted">(${fmt(c)})</span></span>`).join("")}</span></div>`:""}</div>`;
+}
 function renderSentiment(months){
   const p=state.month,v=sentNet(p),win=new Set(YTD?ytdMonths(p):[p]);
   $("sentSub").textContent="· "+winLabel(p,true);
   const vals=monthly(()=>months.map(sentNet));
-  if(!vals.some(x=>x!=null)){$("sentSummary").innerHTML='<p class="empty-note">No sentiment entered yet. Add it each month on the <a href="upload.html#sentimentCard">Upload month page</a>.</p>';$("sentChart").innerHTML="";return}
+  if(!vals.some(x=>x!=null)){$("sentSummary").innerHTML='<p class="empty-note">No sentiment yet. It is read every morning from the media monitoring tool.</p>';$("sentChart").innerHTML="";return}
   const pos=val(p,"sentiment","sent_positive")||0,neu=val(p,"sentiment","sent_neutral")||0,neg=val(p,"sentiment","sent_negative")||0,t=pos+neu+neg,lb=sentLabel(v);
   const noteMonths=YTD?ytdMonths(p).slice().reverse():[p],nt=noteMonths.map(m=>({m,n:(D.notes||[]).find(x=>x.topic==="sentiment"&&x.period===m)})).find(x=>x.n);
   $("sentSummary").innerHTML=v==null?`<p class="empty-note">No sentiment entered for ${esc(winLabel(p,true))}.</p>`:
     `<div class="big">${sentFmt(v)}</div><div style="margin:6px 0">${pill(lb.kind,lb.label)}</div><div class="cc">${chips(sentNet,{rate:true})}</div>
      <div class="mix">${[[pos,"--s1"],[neu,"--muted"],[neg,"--s2"]].filter(x=>x[0]>0).map(([a,c])=>`<i style="width:${a/t*100}%;background:var(${c})"></i>`).join("")}</div>
      <div class="mixl"><span><i style="background:var(--s1)"></i>${pct(pos/t,0)} positive</span><span><i style="background:var(--muted)"></i>${pct(neu/t,0)} neutral</span><span><i style="background:var(--s2)"></i>${pct(neg/t,0)} negative</span></div>
+     ${sentBreak(win)}
      ${nt?`<div class="why"><b>What drove it${YTD?` (${mLabel(nt.m,{month:"short"})})`:""}:</b> ${esc(nt.n.note)}</div>`:""}`;
   netChart($("sentChart"),months,vals,win,notesFor(months,"communications"));
 }

@@ -125,6 +125,19 @@ Deno.serve(async (req) => {
     return json({ ok: true }, 200, h);
   }
 
+  // Sentiment counts come from the media monitoring tool (sentiment-sync); only the "what drove it" note is typed.
+  if (body.action === "sentiment_note") {
+    const { period, note } = body;
+    if (!isPeriod(period)) return json({ error: "Choose the month." }, 400, h);
+    if (note != null && (typeof note !== "string" || note.length > 1000)) return json({ error: "Keep the note under 1,000 characters." }, 400, h);
+    const text = typeof note === "string" ? note.trim() : "";
+    const { error } = text
+      ? await db.from("month_notes").upsert({ period, topic: "sentiment", note: text, updated_at: new Date().toISOString() }, { onConflict: "period,topic" })
+      : await db.from("month_notes").delete().eq("period", period).eq("topic", "sentiment");
+    if (error) return json({ error: `Saving the note failed: ${error.message}` }, 500, h);
+    return json({ ok: true }, 200, h);
+  }
+
   // Chart notes: {period, topic:"chart:<stream>", note|null}. Shown as markers on the dashboard charts; null removes it.
   if (body.action === "note") {
     const { period, topic, note } = body;
@@ -180,6 +193,8 @@ Deno.serve(async (req) => {
     for (let i = metrics.length - 1; i >= 0; i--) if (metrics[i].source === "social" && (metrics[i].dimension === "Instagram" || (metrics[i].dimension === "Facebook" && metrics[i].metric !== "link_clicks"))) metrics.splice(i, 1);
     skippedMeta = before - metrics.length;
   }
+  // Sentiment comes from the media monitoring tool, so any sentiment rows in a file are ignored.
+  for (let i = metrics.length - 1; i >= 0; i--) if (metrics[i].source === "sentiment") metrics.splice(i, 1);
   if (metrics.length) {
     const rows = metrics.map((m: any) => ({ period, stream: m.stream, source: m.source, brand: "All", metric: m.metric, dimension: typeof m.dimension === "string" ? m.dimension : "", value: m.value, updated_by: "upload page" }));
     const { error } = await db.from("metric_values").upsert(rows, { onConflict: "period,source,brand,metric,dimension" });
