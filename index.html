@@ -331,8 +331,8 @@ html{scroll-behavior:smooth}
       <h1>MCE Executive Dashboard</h1>
     </div>
     <div class="controls">
-      <label>Month <select id="monthSel"></select></label>
-      <label>View <span class="seg" role="group" aria-label="View"><button type="button" id="vMonth" aria-pressed="true">Month</button><button type="button" id="vYtd" aria-pressed="false">Year to date</button></span></label>
+      <label><span id="selLbl">Month</span> <select id="monthSel"></select></label>
+      <label>View <span class="seg" role="group" aria-label="View"><button type="button" id="vMonth" aria-pressed="true">Month</button><button type="button" id="vQtr" aria-pressed="false">Quarter</button><button type="button" id="vYtd" aria-pressed="false">Year to date</button></span></label>
             <button type="button" class="upl ask-btn" id="askOpen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Ask the data</button>
             <button type="button" class="upl" id="pdfBtn" title="Save this view as a PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>Download PDF</button>
       <div class="print-meta" id="printMeta"></div>
@@ -548,14 +548,20 @@ const mShort=p=>{const d=new Date(p+"T12:00:00");return d.toLocaleDateString("en
 function mval(period,source,metric,dim=""){return IDX[`${period}|${source}|All|${metric}|${dim}`]??null}
 // Year to date: Jan through the given month. Counts add up; follower totals and similar take the latest month.
 // Last year's YTD uses exactly the months this year has; if last year is missing any of them, YoY shows "–".
-let YTD=false;
+let YTD=false,VIEW="month";   // YTD is true for any multi-month window (quarter or year to date)
+const qStart=p=>periodOf(+p.slice(0,4),Math.floor((+p.slice(5,7)-1)/3)*3+1);
+const qOf=p=>Math.floor((+p.slice(5,7)-1)/3)+1;
+// The months counted for a window ending at p: the quarter so far, or January so far.
+function winMonths(p){if(VIEW!=="quarter")return ytdMonths(p);const out=[];for(let m=qStart(p);m<=p;m=shiftMonth(m,1))out.push(m);return out}
+const winWord=()=>VIEW==="quarter"?"this quarter":"year to date";
 const STOCK=new Set(["followers","unique_open_rate_main_list"]);
 function ytdMonths(p){const y=p.slice(0,4),out=[];for(let m=1;m<=+p.slice(5,7);m++)out.push(`${y}-${String(m).padStart(2,"0")}-01`);return out}
 function keptMonths(period,source,metrics,dim){
-  const sy=state.month.slice(0,4),has=m=>metrics.every(k=>mval(m,source,k,dim)!=null);
-  if(period.slice(0,4)===sy)return ytdMonths(period).filter(has);
-  // Last year's window: only comparable when it has every month this year has.
-  const want=ytdMonths(sy+period.slice(4)).filter(has).map(m=>period.slice(0,4)+m.slice(4));
+  const has=m=>metrics.every(k=>mval(m,source,k,dim)!=null);
+  if(period===state.month)return winMonths(period).filter(has);
+  // A comparison window (last quarter, last year): only comparable when it has every month the current window has.
+  const off=(+period.slice(0,4)-+state.month.slice(0,4))*12+(+period.slice(5,7)-+state.month.slice(5,7));
+  const want=winMonths(state.month).filter(has).map(m=>shiftMonth(m,off));
   return want.every(has)?want:[];
 }
 function val(period,source,metric,dim=""){
@@ -575,7 +581,8 @@ function rv(period,source,num,den,dim=""){
   return ratio(ms.reduce((a,m)=>a+mval(m,source,num,dim),0),ms.reduce((a,m)=>a+mval(m,source,den,dim),0));
 }
 function monthly(f){const k=YTD;YTD=false;try{return f()}finally{YTD=k}}
-const winLabel=(p,long)=>YTD?(p.slice(5,7)==="01"?mLabel(p,{month:long?"long":"short",year:"numeric"}):`Jan–${mLabel(p,{month:"short"})} ${p.slice(0,4)}`):mLabel(p,long?{month:"long",year:"numeric"}:undefined);
+const qLabel=(p,long)=>{const full=+p.slice(5,7)%3===0,ms=winMonths(p);return `Q${qOf(p)} ${p.slice(0,4)}${full?"":" to date"}${long?` (${ms.length>1?mLabel(ms[0],{month:"short"})+"–":""}${mLabel(p,{month:"short"})})`:""}`};
+const winLabel=(p,long)=>VIEW==="quarter"&&YTD?qLabel(p,long):YTD?(p.slice(5,7)==="01"?mLabel(p,{month:long?"long":"short",year:"numeric"}):`Jan–${mLabel(p,{month:"short"})} ${p.slice(0,4)}`):mLabel(p,long?{month:"long",year:"numeric"}:undefined);
 function series(fn,n=13){return monthly(()=>{const out=[];for(let i=n-1;i>=0;i--){const p=shiftMonth(state.month,-i);out.push({p,v:fn(p)})}return out})}
 
 /* ---------- change chips ---------- */
@@ -590,6 +597,7 @@ function chips(fn,opts){
   const p=state.month,c=fn(p);
   const yoy=change(c,fn(shiftMonth(p,-12)),opts);
   const one=(lbl,x)=>x?`<span class="chg ${x.good?"up":"down"}">${x.text}</span> ${lbl}`:`<span class="chg none">–</span> ${lbl}`;
+  if(YTD&&VIEW==="quarter")return `${one("QoQ",change(c,fn(shiftMonth(p,-3)),opts))} · ${one("YoY",yoy)}`;
   if(YTD)return one("YoY",yoy);
   return `${one("MoM",change(c,fn(shiftMonth(p,-1)),opts))} · ${one("YoY",yoy)}`;
 }
@@ -599,9 +607,9 @@ const NODATA=`<span class="nodata">Not uploaded</span>`;
 function renderCoverage(){
   const p=state.month;
   const has=src=>D.metrics.some(m=>m.period===p&&m.source===src);
-  if(YTD){const ms=ytdMonths(p),n=src=>ms.filter(m=>D.metrics.some(x=>x.period===m&&x.source===src)).length;
+  if(YTD){const ms=winMonths(p),n=src=>ms.filter(m=>D.metrics.some(x=>x.period===m&&x.source===src)).length;
     const it=[["Website","GA4",n("ga4")],["Email","Insightly",n("insightly")],["Social","Scheduling tool",n("social")]];
-    $("coverage").innerHTML=`<span class="lbl">Year to date, ${winLabel(p,true)}</span>`+it.map(([a,b,k])=>`<span class="src ${k===ms.length?"live":"sample"}"><i></i>${a} <small>${b} · ${k} of ${ms.length} month${ms.length===1?"":"s"} uploaded</small></span>`).join("")+`<span class="src live"><i></i>Events <small>PheedLoop · live</small></span><a class="src link" href="upload.html">Upload a missing month →</a>`;return}
+    $("coverage").innerHTML=`<span class="lbl">${VIEW==="quarter"?"":"Year to date, "}${winLabel(p,true)}</span>`+it.map(([a,b,k])=>`<span class="src ${k===ms.length?"live":"sample"}"><i></i>${a} <small>${b} · ${k} of ${ms.length} month${ms.length===1?"":"s"} uploaded</small></span>`).join("")+`<span class="src live"><i></i>Events <small>PheedLoop · live</small></span><a class="src link" href="upload.html">Upload a missing month →</a>`;return}
   const items=[["Website","GA4",has("ga4")],["Email","Insightly",has("insightly")],["Social","Scheduling tool",has("social")],["Events","PheedLoop",!!D.sync],["Send plan","eBlast calendar",!!D.eblast]];
   $("coverage").innerHTML=`<span class="lbl">${mLabel(p,{month:"long",year:"numeric"})}</span>`+items.map(([a,b,ok])=>`<span class="src ${ok?"live":"sample"}"><i></i>${a} <small>${b} · ${ok?(a==="Send plan"||a==="Events"?"live":"uploaded"):(a==="Events"?"not connected":"not uploaded")}</small></span>`).join("")+`<a class="src link" href="upload.html">Upload or update this month →</a>`;
 }
@@ -617,7 +625,7 @@ function sparkFrom(sr,color,kind,colorFn){
 function renderKPIs(){
   const p=state.month,k=[];
   const sess=x=>val(x,"ga4","sessions"),eng_s=x=>val(x,"ga4","engaged_sessions");
-  const lq=YTD?ytdMonths(p).filter(lowQuality):(lowQuality(p)?[p]:[]);
+  const lq=YTD?winMonths(p).filter(lowQuality):(lowQuality(p)?[p]:[]);
   k.push({k:"Engaged website sessions",v:eng_s(p)!=null?fmt(eng_s(p)):null,small:sess(p)!=null?` of ${fmt(sess(p))}`:"",d:chips(eng_s),p:eng_s(p)!=null&&lq.length?pill("serious",YTD?`${lq.length} spike month${lq.length===1?"":"s"}`:"Traffic spike"):null,s:sparkFrom(series(eng_s),"--s1")});
   const ke=x=>val(x,"ga4","key_events");
   const kr=x=>{const v=rv(x,"ga4","key_events","engaged_sessions");return v==null?null:v*1000};
@@ -626,7 +634,7 @@ function renderKPIs(){
   const o=open(p);
   k.push({k:"Email open rate",v:o!=null?pct(o):null,d:chips(open,{rate:true}),p:o!=null?(o>=BENCH.open?pill("good","At or above peers"):pill("serious",`${((BENCH.open-o)*100).toFixed(0)} pts below peers`)):null});
   const bs=x=>allVal(x,"insightly","broad_sends_main_list"),b=bs(p);
-  if(YTD){const ms=ytdMonths(p).filter(m=>mval(m,"insightly","broad_sends_main_list")!=null),over=ms.filter(m=>mval(m,"insightly","broad_sends_main_list")>MONTH_CAP).length;
+  if(YTD){const ms=winMonths(p).filter(m=>mval(m,"insightly","broad_sends_main_list")!=null),over=ms.filter(m=>mval(m,"insightly","broad_sends_main_list")>MONTH_CAP).length;
     k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${fmt(MONTH_CAP*ms.length)}`,d:`${ms.length} month${ms.length===1?"":"s"} · ${chips(bs,{better:"lower"})}`,p:b!=null?(over?pill("crit",`${over} month${over===1?"":"s"} over cap`):pill("good","Every month within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")})}
   else k.push({k:"Broad emails to a member",v:b!=null?fmt(b):null,small:` / ~${MONTH_CAP}`,d:chips(bs,{better:"lower"}),p:b!=null?(b>MONTH_CAP?pill("crit","Over cap"):pill("good","Within cap")):null,s:sparkFrom(series(bs),"--seq","bar",(i,v)=>v>MONTH_CAP?"--crit":"--seq")});
   const eng=x=>{let s=null;for(const pl of PLATFORMS){const v=val(x,"social","engagements",pl);if(v!=null)s=(s||0)+v}return s};
@@ -654,15 +662,15 @@ function emptyNote(host,text){$(host).innerHTML=`<p class="empty-note">${text}</
 
 function metricTable(rows){
   const p=state.month;
-  return `<thead><tr><th>Measure</th><th class="num">${winLabel(p)}</th>${YTD?"":'<th class="num">MoM</th>'}<th class="num">YoY</th></tr></thead><tbody>`+rows.map(([label,fn,show,opts={}])=>{
+  return `<thead><tr><th>Measure</th><th class="num">${winLabel(p)}</th>${YTD&&VIEW!=="quarter"?"":`<th class="num">${YTD?"QoQ":"MoM"}</th>`}<th class="num">YoY</th></tr></thead><tbody>`+rows.map(([label,fn,show,opts={}])=>{
     const c=fn(p),yoy=change(c,fn(shiftMonth(p,-12)),opts);
     const ch=x=>x?`<span class="chg ${x.good?"up":"down"}">${x.text}</span>`:`<span class="chg none">–</span>`;
-    return `<tr><td>${label}</td><td class="num"><b>${c==null?"–":show(c)}</b></td>${YTD?"":`<td class="num">${ch(change(c,fn(shiftMonth(p,-1)),opts))}</td>`}<td class="num">${ch(yoy)}</td></tr>`}).join("")+"</tbody>";
+    return `<tr><td>${label}</td><td class="num"><b>${c==null?"–":show(c)}</b></td>${YTD&&VIEW!=="quarter"?"":`<td class="num">${ch(change(c,fn(shiftMonth(p,YTD?-3:-1)),opts))}</td>`}<td class="num">${ch(yoy)}</td></tr>`}).join("")+"</tbody>";
 }
 // Small multiples: one tile per measure with the period's value, change and a 13-month column chart.
 // Dark bars are the months counted in the headline value; lighter bars are context.
 function metricGrid(gridId,tableId,noteId,rows,has,empty){
-  const p=state.month,months=series(()=>0).map(x=>x.p),win=new Set(YTD?ytdMonths(p):[p]);
+  const p=state.month,months=series(()=>0).map(x=>x.p),win=new Set(YTD?winMonths(p):[p]);
   if(!has){$(gridId).innerHTML=`<p class="empty-note">${empty}</p>`;$(tableId).innerHTML="";$(noteId).textContent="";return}
   $(gridId).innerHTML=rows.map((r,i)=>{const c=r[1](p);return `<div class="tile"><div class="t-k">${esc(r[0])}</div><div class="t-v">${c==null?"–":r[2](c)}</div><div class="t-d">${chips(r[1],r[3]||{})}</div><div data-i="${i}"></div></div>`}).join("");
   rows.forEach((r,i)=>{const vals=monthly(()=>months.map(r[1]));const host=$(gridId).querySelector(`[data-i="${i}"]`);
@@ -685,8 +693,8 @@ function renderMarketing(){
   const ch=CHANNELS.map(c=>({c,v:val(p,"ga4","sessions",c)})).filter(x=>x.v!=null);
   const tot=ch.reduce((a,x)=>a+x.v,0);
   if(ch.length){const mx=Math.max(...ch.map(x=>x.v));$("channels").innerHTML=ch.sort((a,b)=>b.v-a.v).map(x=>`<div class="hb"><span class="t">${esc(x.c)}</span><span class="track"><span class="fill" style="width:${x.v/mx*100}%"></span></span><span class="val">${pct(x.v/tot,0)}</span></div>`).join("")+`<p class="note">Share of ${fmt(tot)} sessions with a channel.</p>`}
-  else emptyNote("channels",YTD?"No channel breakdown uploaded this year.":"No channel breakdown uploaded for this month.");
-  $("webTblH").textContent=YTD?"Website year to date":"Website this month";$("webTblSub").textContent="· "+winLabel(p,true);
+  else emptyNote("channels",YTD?`No channel breakdown uploaded ${VIEW==="quarter"?"this quarter":"this year"}.`:"No channel breakdown uploaded for this month.");
+  $("webTblH").textContent=YTD?"Website "+winWord():"Website this month";$("webTblSub").textContent="· "+winLabel(p,true);
   const g=m=>x=>val(x,"ga4",m);
   const has=["sessions","users","key_events"].some(m=>val(p,"ga4",m)!=null);
   metricGrid("webGrid","webTable","webGridNote",[
@@ -713,7 +721,7 @@ function renderComms(){
     $("rateLegend").innerHTML=`<span><i style="--c:var(--s1)"></i>Unique open rate</span><span><i style="--c:var(--s2)"></i>Unique click rate</span><span class="muted">Peers: opens ${pct(BENCH.open)}, clicks ${pct(BENCH.click)}</span>`;
   } else {emptyNote("rateChart","Open and click rates appear once monthly Insightly numbers (delivered, unique opens, unique clicks) are uploaded. The 2026 audit only has year-to-date rates: 23.3% opens and 4.4% clicks.");$("rateLegend").innerHTML=""}
   renderFatigue(months);renderSentiment(months);
-  $("emailH").textContent=YTD?"Email year to date":"Email this month";$("emailSub").textContent="· "+winLabel(p,true);
+  $("emailH").textContent=YTD?"Email "+winWord():"Email this month";$("emailSub").textContent="· "+winLabel(p,true);
   const e=m=>x=>val(x,"insightly",m),er=(m)=>x=>rv(x,"insightly",m,"delivered");
   const hasE=["campaign_sends","delivered","unique_opens"].some(m=>val(p,"insightly",m)!=null);
   metricGrid("emailGrid","emailTable","emailGridNote",[
@@ -725,7 +733,7 @@ function renderComms(){
   const prev=shiftMonth(p,-1);
   // Follower change: MoM in month view; since the first uploaded month this year in YTD view.
   const fChange=pl=>{if(!YTD){const a=mval(p,"social","followers",pl),b=mval(prev,"social","followers",pl);return a!=null&&b!=null?{d:a-b,l:"MoM"}:null}
-    const ms=ytdMonths(p).filter(m=>mval(m,"social","followers",pl)!=null);if(ms.length<2)return null;
+    const ms=winMonths(p).filter(m=>mval(m,"social","followers",pl)!=null);if(ms.length<2)return null;
     return{d:mval(ms[ms.length-1],"social","followers",pl)-mval(ms[0],"social","followers",pl),l:"since "+mLabel(ms[0],{month:"short"})}};
   const srows=PLATFORMS.map(pl=>{const g=(m,x=p)=>val(x,"social",m,pl);return{pl,f:g("followers"),fc:fChange(pl),i:g("impressions"),e:g("engagements"),er:rv(p,"social","engagements","impressions",pl),posts:g("posts"),lc:g("link_clicks"),eC:chips(x=>g("engagements",x))}}).filter(r=>r.f!=null||r.e!=null||r.i!=null);
   $("socialTable").innerHTML=srows.length?`<thead><tr><th>Platform</th><th class="num">Followers</th><th class="num">Impressions</th><th class="num">Engagements</th><th class="num">Eng. rate</th><th class="num">Posts</th></tr></thead><tbody>`+srows.map(r=>`<tr><td>${esc(r.pl)}</td><td class="num">${fmt(r.f)}${r.fc?`<div class="cc"><span class="chg ${r.fc.d>=0?"up":"down"}">${r.fc.d>=0?"+":"−"}${fmt(Math.abs(r.fc.d))}</span> ${r.fc.l}</div>`:""}</td><td class="num">${fmt(r.i)}</td><td class="num">${fmt(r.e)}<div class="cc">${r.eC}</div></td><td class="num">${pct(r.er,1)}</td><td class="num">${fmt(r.posts)}</td></tr>`).join("")+"</tbody>":`<tbody><tr><td class="empty-note">No social numbers uploaded for ${winLabel(p,true)}.</td></tr></tbody>`;
@@ -765,12 +773,12 @@ function sentBreak(win){
   return `<div class="sbreak">${br.length?`<div><b>By brand</b><span class="its">${br.map(x=>`<span>${esc(x.b)} <b>${sentFmt(x.s)}</b> <span class="muted">(${fmt(x.t)})</span></span>`).join("")}</span></div>`:""}${top.length?`<div><b>Top themes</b><span class="its">${top.map(([t,c])=>`<span>${esc(t)} <span class="muted">(${fmt(c)})</span></span>`).join("")}</span></div>`:""}</div>`;
 }
 function renderSentiment(months){
-  const p=state.month,v=sentNet(p),win=new Set(YTD?ytdMonths(p):[p]);
+  const p=state.month,v=sentNet(p),win=new Set(YTD?winMonths(p):[p]);
   $("sentSub").textContent="· "+winLabel(p,true);
   const vals=monthly(()=>months.map(sentNet));
   if(!vals.some(x=>x!=null)){$("sentSummary").innerHTML='<p class="empty-note">No sentiment yet. It is read every morning from the media monitoring tool.</p>';$("sentChart").innerHTML="";return}
   const pos=val(p,"sentiment","sent_positive")||0,neu=val(p,"sentiment","sent_neutral")||0,neg=val(p,"sentiment","sent_negative")||0,t=pos+neu+neg,lb=sentLabel(v);
-  const noteMonths=YTD?ytdMonths(p).slice().reverse():[p],nt=noteMonths.map(m=>({m,n:(D.notes||[]).find(x=>x.topic==="sentiment"&&x.period===m)})).find(x=>x.n);
+  const noteMonths=YTD?winMonths(p).slice().reverse():[p],nt=noteMonths.map(m=>({m,n:(D.notes||[]).find(x=>x.topic==="sentiment"&&x.period===m)})).find(x=>x.n);
   $("sentSummary").innerHTML=v==null?`<p class="empty-note">No sentiment entered for ${esc(winLabel(p,true))}.</p>`:
     `<div class="big">${sentFmt(v)}</div><div style="margin:6px 0">${pill(lb.kind,lb.label)}</div><div class="cc">${chips(sentNet,{rate:true})}</div>
      <div class="mix">${[[pos,"--s1"],[neu,"--muted"],[neg,"--s2"]].filter(x=>x[0]>0).map(([a,c])=>`<i style="width:${a/t*100}%;background:var(${c})"></i>`).join("")}</div>
@@ -784,7 +792,7 @@ function renderSentiment(months){
 const PCOLOR={LinkedIn:"--s1",Facebook:"--s2",Instagram:"--s3",X:"--s4",YouTube:"--s5"};
 const SOC=[["engagements","Engagements"],["impressions","Impressions"],["followers","Followers"],["link_clicks","Link clicks"],["posts","Posts"],["eng_rate","Engagement rate"]];
 function renderSocial(months){
-  const p=state.month,win=new Set(YTD?ytdMonths(p):[p]),k=state.soc||"engagements",isRate=k==="eng_rate",isLevel=k==="followers";
+  const p=state.month,win=new Set(YTD?winMonths(p):[p]),k=state.soc||"engagements",isRate=k==="eng_rate",isLevel=k==="followers";
   $("socMetric").innerHTML=SOC.map(([id,l])=>`<button type="button" data-k="${id}" aria-pressed="${id===k}">${l}</button>`).join("");
   $("socMetric").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.soc=b.dataset.k;renderSocial(months)});
   const show=v=>v==null?"–":isRate?pct(v,1):fmt(Math.round(v));
@@ -890,7 +898,7 @@ const TARGETS=[
   {stream:"membership",source:"insightly_members",metric:"dues",label:"Membership dues (before tax)",kind:"member",money:true},
 ];
 function targetActual(t,p){
-  const k=YTD;YTD=true;try{
+  const k=YTD,kv=VIEW;YTD=true;VIEW="ytd";try{   // targets are yearly, whatever the view
     const ms=ytdMonths(p);
     if(t.kind==="event"){
       // Events count for the whole year: events already held plus registrations and revenue
@@ -907,7 +915,7 @@ function targetActual(t,p){
       return{v:mval(used[used.length-1],t.source,t.metric,t.dimension||""),start:mval(used[0],t.source,t.metric,t.dimension||""),n:+used[used.length-1].slice(5,7)}}
     if(t.sumDims){let v=null;const used=new Set();for(const pl of PLATFORMS){for(const m of ms){const x=mval(m,t.source,t.base,pl);if(x!=null){v=(v||0)+x;used.add(m)}}}return{v,n:used.size}}
     const used=keptMonths(p,t.source,[t.metric],"");return{v:val(p,t.source,t.metric),n:used.length};
-  }finally{YTD=k}
+  }finally{YTD=k;VIEW=kv}
 }
 function renderTargets(){
   const p=state.month,y=+p.slice(0,4),list=TARGETS.map(t=>({...t,tg:D.targets.find(x=>x.year===y&&x.stream===t.stream&&x.source===t.source&&x.metric===t.metric&&(x.dimension||"")===(t.dimension||""))})).filter(t=>t.tg);
@@ -980,7 +988,7 @@ const isTest=e=>/\btest(ing)?\b/i.test(e.name||"");
 const todayStr=()=>new Date().toISOString().slice(0,10);
 // Events that started between Jan 1 and the end of the given month and have already happened.
 function heldEvents(p){
-  const from=p.slice(0,4)+"-01-01",to=shiftMonth(p,1);
+  const from=winMonths(p)[0],to=shiftMonth(p,1);
   return D.events.filter(e=>e.start_date>=from&&e.start_date<to&&e.start_date<=todayStr()&&!isTest(e)).map(eventTotals);
 }
 // Every event in a calendar year, held or still to come.
@@ -1135,7 +1143,7 @@ function renderBrief(){
   $("briefNote").textContent=`Sent ${new Date(b.approved_at).toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}. Written with Claude from this dashboard's data and reviewed by Brian Beehler.`;
 }
 function renderMonthNotes(){
-  const p=state.month,ms=YTD?ytdMonths(p):[p];
+  const p=state.month,ms=YTD?winMonths(p):[p];
   const list=(D.notes||[]).filter(x=>x.topic.startsWith("chart:")&&ms.includes(x.period)).sort((a,b)=>a.period.localeCompare(b.period));
   const host=$("monthNotes");host.hidden=!list.length;if(!list.length){host.innerHTML="";return}
   host.innerHTML=`<span class="lbl">Notes for ${esc(winLabel(p,true))}</span>`+list.map(x=>`<span class="nt"><i></i><span>${esc(x.note)}</span><small>${YTD?mLabel(x.period,{month:"short"})+" · ":""}${NOTE_STREAMS[x.topic.slice(6)]||""}</small></span>`).join("");
@@ -1170,7 +1178,7 @@ function renderSponsorship(){
 
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){YTD=state.view==="ytd";$("vMonth").setAttribute("aria-pressed",!YTD);$("vYtd").setAttribute("aria-pressed",YTD);renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes();renderBrief()}
+function render(){VIEW=state.view;YTD=VIEW!=="month";$("vMonth").setAttribute("aria-pressed",VIEW==="month");$("vQtr").setAttribute("aria-pressed",VIEW==="quarter");$("vYtd").setAttribute("aria-pressed",VIEW==="ytd");fillSel();renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes();renderBrief()}
 function watchJump(){
   // Highlight the last section whose top has scrolled past the jump bar.
   const links=[...document.querySelectorAll("#jump a:not(.totop)")];
@@ -1183,7 +1191,14 @@ function watchJump(){
     if(on){on.setAttribute("aria-current","true");const bar=on.parentElement,l=on.offsetLeft,r=l+on.offsetWidth;if(l<bar.scrollLeft||r>bar.scrollLeft+bar.clientWidth)bar.scrollLeft=l-16}};
   addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(update)}},{passive:true});update();
 }
-function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view==="ytd")u.searchParams.set("view","ytd");else u.searchParams.delete("view");history.replaceState(null,"",u)}
+// Month list, or quarter list in the quarter view (each quarter is represented by its latest month with a slot).
+let PERIODS=[];
+const qEnd=p=>{const qs=qStart(p),inQ=PERIODS.filter(m=>m>=qs&&m<shiftMonth(qs,3));return inQ.length?inQ[inQ.length-1]:p};
+function fillSel(){const sel=$("monthSel"),qv=state.view==="quarter";$("selLbl").textContent=qv?"Quarter":"Month";
+  const opts=qv?[...new Set(PERIODS.map(qEnd))]:PERIODS;
+  const key=opts.join()+qv;if(sel.dataset.key!==key){sel.innerHTML=opts.slice().reverse().map(p=>`<option value="${p}">${qv?`Q${qOf(p)} ${p.slice(0,4)}${+p.slice(5,7)%3?" (to date)":""}`:mLabel(p,{month:"long",year:"numeric"})}</option>`).join("");sel.dataset.key=key}
+  sel.value=state.month}
+function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view!=="month")u.searchParams.set("view",state.view);else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
     const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing")]);
@@ -1207,11 +1222,12 @@ async function boot(){
   state.month=wanted&&periods.includes(wanted)?wanted:periods[periods.length-1];
   const latestWithData=[...new Set(D.metrics.map(m=>m.period))].sort().pop();
   if(!wanted&&latestWithData&&!D.metrics.some(m=>m.period===state.month))state.month=latestWithData;
-  $("monthSel").innerHTML=periods.slice().reverse().map(p=>`<option value="${p}">${mLabel(p,{month:"long",year:"numeric"})}</option>`).join("");
-  $("monthSel").value=state.month;
+  PERIODS=periods;
   $("monthSel").onchange=e=>{state.month=e.target.value;setURL();render()};
-  if(q.get("view")==="ytd")state.view="ytd";
+  if(["ytd","quarter"].includes(q.get("view")))state.view=q.get("view");
+  if(state.view==="quarter")state.month=qEnd(state.month);
   $("vMonth").onclick=()=>{state.view="month";setURL();render()};
+  $("vQtr").onclick=()=>{state.view="quarter";state.month=qEnd(state.month);setURL();render()};
   $("vYtd").onclick=()=>{state.view="ytd";setURL();render()};
   render();watchJump();
   let askReady=false;const dlg=$("askDlg");askReadyReset=()=>{askReady=false};
@@ -1220,8 +1236,8 @@ async function boot(){
   // PDF: switch to the light theme and a fixed page width, redraw, then open the print dialog ("Save as PDF").
   const origTitle=document.title;let printing=false;
   const prep=()=>{if(printing)return;printing=true;const h=document.documentElement;h.dataset.prevTheme=h.getAttribute("data-theme")||"";h.setAttribute("data-theme","light");h.classList.add("printing");
-    $("printMeta").innerHTML=`<b>${YTD?"Year to date, "+esc(winLabel(state.month,true)):esc(mLabel(state.month,{month:"long",year:"numeric"}))}</b><br>Prepared ${new Date().toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}`;
-    document.title=`MCE Executive Dashboard - ${YTD?"YTD "+winLabel(state.month,true):mLabel(state.month,{month:"long",year:"numeric"})}`;render()};
+    $("printMeta").innerHTML=`<b>${VIEW==="quarter"?esc(winLabel(state.month,true)):YTD?"Year to date, "+esc(winLabel(state.month,true)):esc(mLabel(state.month,{month:"long",year:"numeric"}))}</b><br>Prepared ${new Date().toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}`;
+    document.title=`MCE Executive Dashboard - ${VIEW==="quarter"?winLabel(state.month):YTD?"YTD "+winLabel(state.month,true):mLabel(state.month,{month:"long",year:"numeric"})}`;render()};
   const restore=()=>{if(!printing)return;printing=false;const h=document.documentElement;h.classList.remove("printing");if(h.dataset.prevTheme)h.setAttribute("data-theme",h.dataset.prevTheme);else h.removeAttribute("data-theme");document.title=origTitle;render()};
   window.__prepPrint=prep;window.__restorePrint=restore;
   addEventListener("beforeprint",prep);addEventListener("afterprint",restore);

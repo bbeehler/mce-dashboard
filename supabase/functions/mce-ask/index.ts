@@ -313,7 +313,7 @@ Deno.serve(async (req) => {
   const log: Record<string, unknown> = { question: question.slice(0, 1000) };
   try {
     const brief = await buildBrief();
-    const view = `The person is looking at ${typeof body.month === "string" && /^\d{4}-\d{2}$/.test(body.month) ? body.month : "the latest month"} in the ${body.view === "ytd" ? "year-to-date" : "monthly"} view. Today is ${new Date().toISOString().slice(0, 10)}.`;
+    const view = `The person is looking at ${typeof body.month === "string" && /^\d{4}-\d{2}$/.test(body.month) ? body.month : "the latest month"} in the ${body.view === "ytd" ? "year-to-date" : body.view === "quarter" ? "quarterly (calendar quarter containing that month, so far)" : "monthly"} view. Today is ${new Date().toISOString().slice(0, 10)}.`;
     const history = Array.isArray(body.history) ? body.history.slice(-4) : [];
     const messages: any[] = [];
     history.forEach((t: any, i: number) => {
