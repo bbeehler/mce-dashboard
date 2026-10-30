@@ -997,7 +997,7 @@ function renderEvents(){
   const p=LIVE_PERIOD,evs=liveEvents();
   $("evLive").textContent=D.sync?`Events, live from PheedLoop · updated ${agoText(D.sync.finished_at||D.sync.started_at)}`:"Events, from PheedLoop · not connected yet";
   if(!evs.length){$("evTable").innerHTML=`<tbody><tr><td class="empty-note">${D.sync?"No upcoming or recent events in PheedLoop.":"Registrations appear here once the PheedLoop connection is switched on."}</td></tr></tbody>`;$("evNote").textContent="";return}
-  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month so far</th><th class="num">vs last year</th><th class="num">Revenue</th><th>Payment</th><th>Status</th></tr></thead><tbody>`;
+  let h=`<thead><tr><th>Event</th><th class="num">Months out</th><th>Registrations at month end</th><th class="num">This month so far</th><th class="num">vs last year</th><th class="num">Revenue</th><th class="num">Avg ticket</th><th>Payment</th><th>Status</th></tr></thead><tbody>`;
   evs.forEach((e,i)=>{
     const share=e.target_registrations?Math.min(1,e.regs/e.target_registrations):e.capacity?Math.min(1,e.regs/e.capacity):0;
     const exp=e.expected&&e.target_registrations?Math.min(1,e.expected/e.target_registrations):null;
@@ -1008,15 +1008,16 @@ function renderEvents(){
       <td class="num">${e.gain==null?"–":(e.gain>=0?"+":"")+fmt(e.gain)}</td>
       <td class="num">${lyd==null?'<span style="color:var(--muted)">–</span>':`<span class="${lyd>=0?"up":"down"}">${lyd>=0?"+":""}${pct(lyd,0)}</span>`}</td>
       <td class="num">${e.revenue==null?"–":money(e.revenue)}${e.target_revenue?`<div class="evmeta">of ${money(e.target_revenue)}${e.revAsOf?` · end of ${mLabel(e.revAsOf,{month:"short"})}`:""}</div>`:(e.revAsOf?`<div class="evmeta">end of ${mLabel(e.revAsOf,{month:"short"})}</div>`:"")}</td>
+      <td class="num">${tixCell(tixOf(e.code))}</td>
       <td>${payCell(e.code)}</td>
       <td>${pill(e.st.kind,e.st.label)}</td></tr>
-      <tr class="detail" hidden data-d="${i}"><td colspan="8"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
+      <tr class="detail" hidden data-d="${i}"><td colspan="9"><h3>Registrations at each month end <span class="sub">· by months before the event</span></h3><div class="pace"></div><div class="legend"><span><i style="--c:var(--s1)"></i>This year</span>${e.prior_code?'<span><i class="dash" style="--c:var(--muted)"></i>Last year</span>':""}${e.target_registrations?'<span><i class="dash" style="--c:var(--ink-2)"></i>Target</span>':""}</div></td></tr>`;
   });
-  $("evTable").innerHTML=h+"</tbody>";payTips($("evTable"));
+  $("evTable").innerHTML=h+"</tbody>";payTips($("evTable"));tixTips($("evTable"));
   // Summary across the upcoming and recent events in the table.
   const ps=evs.map(e=>payOf(e.code)).filter(Boolean),S=k=>ps.reduce((a,p)=>a+p[k],0);
-  $("evPay").innerHTML=ps.length?`<span><b>${fmt(S("owing"))}</b> order${S("owing")===1?"":"s"} owing <b>${money(S("owed"))}</b></span><span><b>${fmt(S("inc"))}</b> incomplete registration${S("inc")===1?"":"s"}</span><span>${fmt(S("paid"))} paid · ${fmt(S("free"))} complimentary</span><span style="flex:1"></span>${PAY_LEGEND}`:"";
-  $("evNote").textContent="Registrations update every hour from PheedLoop and don't change with the month picker. Click an event for its month-end registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target.";
+  $("evPay").innerHTML=ps.length?`<span><b>${fmt(S("owing"))}</b> order${S("owing")===1?"":"s"} owing <b>${money(S("owed"))}</b></span><span><b>${fmt(S("inc"))}</b> incomplete registration${S("inc")===1?"":"s"}</span><span>${fmt(S("paid"))} paid · ${fmt(S("free"))} complimentary</span>${(()=>{const t=tixSum(evs.map(e=>e.code));return t&&t.sold?`<span>Average ticket <b>${money0(t.rev/t.sold)}</b> across ${fmt(t.sold)} paid tickets</span>`:""})()}<span style="flex:1"></span>${PAY_LEGEND}`:"";
+  $("evNote").textContent="Registrations update every hour from PheedLoop and don't change with the month picker. Click an event for its month-end registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target. "+TIX_NOTE;
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
     const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
       if(!open){const e=evs[i];const own=D.snaps.filter(s=>s.event_code===e.code).map(s=>({mb:monthsBefore(e.start_date,s.period),v:s.registrations}));
@@ -1042,6 +1043,16 @@ function payCell(code){const p=payOf(code);if(!p)return '<span style="color:var(
 function payTips(host){host.querySelectorAll("[data-pay]").forEach(el=>{const p=payOf(el.dataset.pay);if(!p)return;
   el.addEventListener("mousemove",ev=>{ev.stopPropagation();showTip(`<b>Registration orders: ${fmt(p.orders)}</b><div>${fmt(p.paid)} paid</div><div>${fmt(p.free)} complimentary (no charge)</div><div>${fmt(p.owing)} owing${p.owing?` · ${money(p.owed)}`:""}</div><div>${fmt(p.inc)} incomplete (started, not finished)</div>`,ev.clientX,ev.clientY)});
   el.addEventListener("mouseleave",hideTip)})}
+/* ---------- average ticket price (PheedLoop; sponsorship categories and free tickets left out) ---------- */
+function tixOf(code){const s=D.snaps.filter(x=>x.event_code===code&&x.tickets_sold!=null).sort((a,b)=>b.period.localeCompare(a.period))[0];
+  return s?{sold:s.tickets_sold||0,rev:Number(s.ticket_revenue||0),comp:s.tickets_comp||0,spons:s.tickets_sponsor||0}:null}
+function tixSum(codes){const t=codes.map(tixOf).filter(Boolean);if(!t.length)return null;return t.reduce((a,x)=>({sold:a.sold+x.sold,rev:a.rev+x.rev,comp:a.comp+x.comp,spons:a.spons+x.spons}),{sold:0,rev:0,comp:0,spons:0})}
+const money0=v=>"$"+Math.round(v).toLocaleString("en-CA");
+function tixCell(t,bold){if(!t||!t.sold)return '<span style="color:var(--muted)">–</span>';
+  const tip=`<b>${money0(t.rev/t.sold)} average ticket</b><div>${fmt(t.sold)} paid ticket${t.sold===1?"":"s"} · ${money0(t.rev)} before tax</div><div>Left out: ${fmt(t.spons)} sponsorship · ${fmt(t.comp)} free</div>`;
+  return `<span class="tix" data-tip="${esc(tip)}">${bold?"<b>":""}${money0(t.rev/t.sold)}${bold?"</b>":""}<div class="evmeta">${fmt(t.sold)} sold</div></span>`}
+function tixTips(host){host.querySelectorAll(".tix[data-tip]").forEach(el=>{el.addEventListener("mousemove",ev=>{ev.stopPropagation();showTip(el.dataset.tip,ev.clientX,ev.clientY)});el.addEventListener("mouseleave",hideTip)})}
+const TIX_NOTE="Average ticket = what paid tickets brought in before tax (after discounts and refunds) divided by the number of paid tickets. Sponsorship categories (sponsors, commanditaires, supporters, exhibitors) and free tickets (speakers, media, comps) are left out. Each item PheedLoop sells counts as one ticket, so a corporate package of 4 seats is 4 tickets, while a golf foursome sold as one item is one ticket.";
 const PAY_LEGEND='<span class="k"><i style="background:var(--s1)"></i>Paid</span><span class="k"><i style="background:color-mix(in srgb,var(--s1) 35%,var(--grid))"></i>Complimentary</span><span class="k"><i style="background:var(--serious)"></i>Owing</span><span class="k"><i style="background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)"></i>Incomplete</span>';
 
 // Every event in the selected year (held and upcoming) with the numbers the targets count.
@@ -1050,11 +1061,11 @@ function renderYearEvents(){
   $("yrEvH").innerHTML=`Every event in ${y} <span class="sub">· the numbers the event targets count</span>`;
   if(!evs.length){$("yrEvTable").innerHTML=`<tbody><tr><td class="empty-note">No events found for ${y}.</td></tr></tbody>`;$("yrEvNote").textContent="";return}
   const tot=k=>evs.reduce((a,e)=>a+(e[k]||0),0),cell=(v,f)=>v==null||v===0&&f!=="r"?'<span style="color:var(--muted)">–</span>':f==="m"?money(v):fmt(v);
-  $("yrEvTable").innerHTML=`<thead><tr><th>Event</th><th>Date</th><th>Code</th><th class="num">Registrations</th><th class="num">Attendance</th><th class="num">Revenue</th><th>Payment</th><th>Status</th></tr></thead><tbody>`+
-    evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td>${payCell(e.code)}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
-    `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td></td><td></td></tr></tbody>`;payTips($("yrEvTable"));
+  $("yrEvTable").innerHTML=`<thead><tr><th>Event</th><th>Date</th><th>Code</th><th class="num">Registrations</th><th class="num">Attendance</th><th class="num">Revenue</th><th class="num">Avg ticket</th><th>Payment</th><th>Status</th></tr></thead><tbody>`+
+    evs.map(e=>`<tr><td>${esc(e.name)}</td><td>${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td>${esc(D.short[e.code]||"")}</td><td class="num">${fmt(e.regs)}</td><td class="num">${e.held?cell(e.att):'<span style="color:var(--muted)">upcoming</span>'}</td><td class="num">${cell(e.rev,"m")}</td><td class="num">${tixCell(tixOf(e.code))}</td><td>${payCell(e.code)}</td><td>${e.held?pill("good","Held"):pill("none","Upcoming")}</td></tr>`).join("")+
+    `<tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>${fmt(tot("regs"))}</b></td><td class="num"><b>${fmt(evs.filter(e=>e.held).reduce((a,e)=>a+(e.att||0),0))}</b></td><td class="num"><b>${money(tot("rev"))}</b></td><td class="num">${tixCell(tixSum(evs.map(e=>e.code)),true)}</td><td></td><td></td></tr></tbody>`;payTips($("yrEvTable"));tixTips($("yrEvTable"));
   const noRev=evs.filter(e=>e.held&&!e.rev),noAtt=evs.filter(e=>e.held&&!e.att);
-  $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so attendance can be entered on the <a href="upload.html#attendanceCard">Upload month page</a>.${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
+  $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so attendance can be entered on the <a href="upload.html#attendanceCard">Upload month page</a>. ${TIX_NOTE}${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
 }
 
 /* ---------- eBlast send plan (live) ---------- */
@@ -1201,7 +1212,7 @@ function fillSel(){const sel=$("monthSel"),qv=state.view==="quarter";$("selLbl")
 function setURL(){const u=new URL(location.href);u.searchParams.set("month",state.month.slice(0,7));u.searchParams.delete("brand");if(state.view!=="month")u.searchParams.set("view",state.view);else u.searchParams.delete("view");history.replaceState(null,"",u)}
 async function boot(){
   try{
-    const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing")]);
+    const [metrics,events,snaps]=await Promise.all([rest("metric_values","select=period,stream,source,brand,metric,dimension,value&order=period"),rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing,tickets_sold,ticket_revenue,tickets_comp,tickets_sponsor")]);
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{D.spons=await rest("sponsorship_totals","select=year,program,level,deals,invoiced,paid_deals,paid")}catch(e){D.spons=[]}

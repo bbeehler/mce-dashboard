@@ -64,8 +64,24 @@ async function moneyFor(code: string) {
     else st.free++;
   }
   st.owingAmount = Math.round(st.owingAmount * 100) / 100;
-  return { revenue, status: st, orders: regs.length, cancelled: regs.length - live.length, complete: live.filter((r: any) => r.registration_complete).length, sub_total: sub, tax_total: tax, payment_total: sum("payment_total"), refund_total: sum("refund_total", regs), amount_due: due, by_category: cats };
+  // Average ticket price: each PheedLoop purchase on a completed order is one ticket (a group order of 9 is
+  // 9 tickets; a golf foursome sold as one item is one ticket). Sponsorship categories are left out, as are
+  // no-charge tickets. Amounts are before tax, after discounts, less any refund.
+  const tk = { sold: 0, revenue: 0, comp: 0, sponsor: 0 };
+  for (const r of live) {
+    if (!r.registration_complete) continue;
+    const n_ = Array.isArray(r.purchases) ? r.purchases.length : 0;
+    if (!n_) continue;
+    if (SPONSOR_CAT.test(String(r.registration_category?.name ?? ""))) { tk.sponsor += n_; continue; }
+    const sub = n(r.sub_total), gross = sub + n(r.tax_total), refunded = n(r.refund_total);
+    const net = gross > 0 ? sub * Math.max(0, 1 - refunded / gross) : 0;
+    if (net > 0.005) { tk.sold += n_; tk.revenue += net; } else tk.comp += n_;
+  }
+  tk.revenue = Math.round(tk.revenue * 100) / 100;
+  return { revenue, status: st, tickets: tk, orders: regs.length, cancelled: regs.length - live.length, complete: live.filter((r: any) => r.registration_complete).length, sub_total: sub, tax_total: tax, payment_total: sum("payment_total"), refund_total: sum("refund_total", regs), amount_due: due, by_category: cats };
 }
+// Registration categories that are sponsorship (English and French), left out of the average ticket price.
+const SPONSOR_CAT = /sponsor|commandit|supporter|partenaire|partner|exhibit|exposant/i;
 const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
 const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : typeof n === "string" && n.trim() !== "" && Number.isFinite(+n) ? +n : null);
 
@@ -86,10 +102,9 @@ Deno.serve(async (req) => {
     const backfillFrom = `${started.getUTCFullYear() - 1}-01-01`;
     const { data: known } = await db.from("events").select("code");
     const have = new Set((known ?? []).map((r: any) => r.code));
-    // Events held earlier this year get their payment status filled in once (only the status columns change).
-    const { data: withStatus } = await db.from("event_snapshots").select("event_code").not("orders", "is", null);
+    // Events held since Jan 1 last year get their payment status and ticket details filled in once (only those columns change).
+    const { data: withStatus } = await db.from("event_snapshots").select("event_code").not("orders", "is", null).not("tickets_sold", "is", null);
     const hasStatus = new Set((withStatus ?? []).map((r: any) => r.event_code));
-    const yearStart = `${started.getUTCFullYear()}-01-01`;
     let statusFilled = 0;
     let written = 0, counted = 0, backfilled = 0;
     const kept: string[] = [];
@@ -100,12 +115,12 @@ Deno.serve(async (req) => {
       if (!code || !start) continue;
       if (/\btest(ing)?\b/i.test(String(e.event_name ?? e.name ?? ""))) continue; // skip PheedLoop test events
       const old = (end ?? start) < cutoff;
-      if (old && have.has(code) && !hasStatus.has(code) && (end ?? start) >= yearStart) {
+      if (old && have.has(code) && !hasStatus.has(code) && (end ?? start) >= backfillFrom) {
         try {
           const m = await moneyFor(code), liveOrders = m.orders - m.cancelled;
           if (liveOrders > 0) {
             const { data: rows } = await db.from("event_snapshots").select("period").eq("event_code", code).order("period", { ascending: false }).limit(1);
-            if (rows?.length) { await db.from("event_snapshots").update({ orders: liveOrders, orders_paid: m.status.paid, orders_free: m.status.free, orders_owing: m.status.owing, orders_incomplete: m.status.incomplete, amount_owing: m.status.owingAmount }).eq("event_code", code).eq("period", rows[0].period); statusFilled++; }
+            if (rows?.length) { await db.from("event_snapshots").update({ orders: liveOrders, orders_paid: m.status.paid, orders_free: m.status.free, orders_owing: m.status.owing, orders_incomplete: m.status.incomplete, amount_owing: m.status.owingAmount, tickets_sold: m.tickets.sold, ticket_revenue: m.tickets.revenue, tickets_comp: m.tickets.comp, tickets_sponsor: m.tickets.sponsor }).eq("event_code", code).eq("period", rows[0].period); statusFilled++; }
           }
         } catch { /* status is optional */ }
         continue;
@@ -119,8 +134,8 @@ Deno.serve(async (req) => {
         try { const a = await pl(`/events/${code}/attendance/`); attendance = Array.isArray(a?.checked_in) ? a.checked_in.length : null; } catch { /* attendance is optional */ }
       }
 
-      let revenue: number | null = null, status: any = null, liveOrders = 0;
-      try { const m = await moneyFor(code); if (m.revenue > 0) revenue = m.revenue; status = m.status; liveOrders = m.orders - m.cancelled; } catch { /* revenue is optional */ }
+      let revenue: number | null = null, status: any = null, tickets: any = null, liveOrders = 0;
+      try { const m = await moneyFor(code); if (m.revenue > 0) revenue = m.revenue; status = m.status; tickets = m.tickets; liveOrders = m.orders - m.cancelled; } catch { /* revenue is optional */ }
 
       const ev: Record<string, unknown> = { code, name: String(e.event_name ?? e.name ?? code).trim(), start_date: start, end_date: end };
       const cap = num(e.attendee_registration_capacity);
@@ -133,11 +148,12 @@ Deno.serve(async (req) => {
       if (attendance != null && attendance > 0) snap.attendance = attendance;
       if (revenue != null) snap.revenue = revenue;
       if (status && liveOrders > 0) Object.assign(snap, { orders: liveOrders, orders_paid: status.paid, orders_free: status.free, orders_owing: status.owing, orders_incomplete: status.incomplete, amount_owing: status.owingAmount });
+      if (tickets && liveOrders > 0) Object.assign(snap, { tickets_sold: tickets.sold, ticket_revenue: tickets.revenue, tickets_comp: tickets.comp, tickets_sponsor: tickets.sponsor });
       const { error: e2 } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
       if (e2) throw new Error(`snapshot ${code}: ${e2.message}`);
       written++; kept.push(code); if (old) backfilled++;
     }
-    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: [counted ? `${counted} counted from attendee lists` : "", backfilled ? `${backfilled} past events added` : "", statusFilled ? `payment status filled for ${statusFilled} past events` : ""].filter(Boolean).join("; ") || null });
+    Object.assign(log, { ok: true, finished_at: new Date().toISOString(), events_seen: events.length, events_written: written, note: [counted ? `${counted} counted from attendee lists` : "", backfilled ? `${backfilled} past events added` : "", statusFilled ? `payment and ticket details filled for ${statusFilled} past events` : ""].filter(Boolean).join("; ") || null });
     await db.from("sync_log").insert(log);
     return json({ ok: true, period, events_seen: events.length, events_written: written, codes: kept });
   } catch (err) {
