@@ -67,14 +67,14 @@ async function moneyFor(code: string) {
   // Average ticket price: each PheedLoop purchase on a completed order is one ticket (a group order of 9 is
   // 9 tickets; a golf foursome sold as one item is one ticket). Sponsorship categories are left out, as are
   // no-charge tickets. Amounts are before tax, after discounts, less any refund.
-  const tk = { sold: 0, revenue: 0, comp: 0, sponsor: 0 };
+  const tk = { sold: 0, revenue: 0, comp: 0, sponsor: 0, sponsorComp: 0 };
   for (const r of live) {
     if (!r.registration_complete) continue;
     const n_ = Array.isArray(r.purchases) ? r.purchases.length : 0;
     if (!n_) continue;
-    if (SPONSOR_CAT.test(String(r.registration_category?.name ?? ""))) { tk.sponsor += n_; continue; }
     const sub = n(r.sub_total), gross = sub + n(r.tax_total), refunded = n(r.refund_total);
     const net = gross > 0 ? sub * Math.max(0, 1 - refunded / gross) : 0;
+    if (SPONSOR_CAT.test(String(r.registration_category?.name ?? ""))) { tk.sponsor += n_; if (net <= 0.005) tk.sponsorComp += n_; continue; }
     if (net > 0.005) { tk.sold += n_; tk.revenue += net; } else tk.comp += n_;
   }
   tk.revenue = Math.round(tk.revenue * 100) / 100;
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     const { data: known } = await db.from("events").select("code");
     const have = new Set((known ?? []).map((r: any) => r.code));
     // Events held since Jan 1 last year get their payment status and ticket details filled in once (only those columns change).
-    const { data: withStatus } = await db.from("event_snapshots").select("event_code").not("orders", "is", null).not("tickets_sold", "is", null);
+    const { data: withStatus } = await db.from("event_snapshots").select("event_code").not("orders", "is", null).not("tickets_sponsor_comp", "is", null);
     const hasStatus = new Set((withStatus ?? []).map((r: any) => r.event_code));
     let statusFilled = 0;
     let written = 0, counted = 0, backfilled = 0;
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
           const m = await moneyFor(code), liveOrders = m.orders - m.cancelled;
           if (liveOrders > 0) {
             const { data: rows } = await db.from("event_snapshots").select("period").eq("event_code", code).order("period", { ascending: false }).limit(1);
-            if (rows?.length) { await db.from("event_snapshots").update({ orders: liveOrders, orders_paid: m.status.paid, orders_free: m.status.free, orders_owing: m.status.owing, orders_incomplete: m.status.incomplete, amount_owing: m.status.owingAmount, tickets_sold: m.tickets.sold, ticket_revenue: m.tickets.revenue, tickets_comp: m.tickets.comp, tickets_sponsor: m.tickets.sponsor }).eq("event_code", code).eq("period", rows[0].period); statusFilled++; }
+            if (rows?.length) { await db.from("event_snapshots").update({ orders: liveOrders, orders_paid: m.status.paid, orders_free: m.status.free, orders_owing: m.status.owing, orders_incomplete: m.status.incomplete, amount_owing: m.status.owingAmount, tickets_sold: m.tickets.sold, ticket_revenue: m.tickets.revenue, tickets_comp: m.tickets.comp, tickets_sponsor: m.tickets.sponsor, tickets_sponsor_comp: m.tickets.sponsorComp }).eq("event_code", code).eq("period", rows[0].period); statusFilled++; }
           }
         } catch { /* status is optional */ }
         continue;
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       if (attendance != null && attendance > 0) snap.attendance = attendance;
       if (revenue != null) snap.revenue = revenue;
       if (status && liveOrders > 0) Object.assign(snap, { orders: liveOrders, orders_paid: status.paid, orders_free: status.free, orders_owing: status.owing, orders_incomplete: status.incomplete, amount_owing: status.owingAmount });
-      if (tickets && liveOrders > 0) Object.assign(snap, { tickets_sold: tickets.sold, ticket_revenue: tickets.revenue, tickets_comp: tickets.comp, tickets_sponsor: tickets.sponsor });
+      if (tickets && liveOrders > 0) Object.assign(snap, { tickets_sold: tickets.sold, ticket_revenue: tickets.revenue, tickets_comp: tickets.comp, tickets_sponsor: tickets.sponsor, tickets_sponsor_comp: tickets.sponsorComp });
       const { error: e2 } = await db.from("event_snapshots").upsert(snap, { onConflict: "event_code,period" });
       if (e2) throw new Error(`snapshot ${code}: ${e2.message}`);
       written++; kept.push(code); if (old) backfilled++;
