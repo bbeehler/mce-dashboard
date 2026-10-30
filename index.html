@@ -253,7 +253,7 @@ html.printing #main,html.printing .band .wrap{width:980px;max-width:980px;paddin
 .paybar i{display:block;height:100%}
 .paybar .pd{background:var(--s1)}.paybar .fr{background:color-mix(in srgb,var(--s1) 35%,var(--grid))}.paybar .ow{background:var(--serious)}.paybar .ic{background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 5px)}
 .paytxt{font-size:12px;color:var(--ink-2);white-space:nowrap}.paytxt b.ow{color:color-mix(in srgb,var(--serious) 70%,var(--ink))}
-.paysum{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:13px;color:var(--ink-2);margin:0 0 12px}
+.paysum{display:grid;gap:6px;font-size:13px;color:var(--ink-2);margin:0 0 12px}.paysum .psrow{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}.paysum .pl{font-weight:600;color:var(--ink);min-width:58px}.paysum b.ow{color:var(--serious)}.paysum .muted{color:var(--muted)}
 .paysum .k{display:inline-flex;align-items:center;gap:6px}.paysum .k i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .paysum b{color:var(--ink)}
 .spons{display:grid;gap:10px}
@@ -1016,7 +1016,9 @@ function renderEvents(){
   $("evTable").innerHTML=h+"</tbody>";payTips($("evTable"));tixTips($("evTable"));
   // Summary across the upcoming and recent events in the table.
   const ps=evs.map(e=>payOf(e.code)).filter(Boolean),S=k=>ps.reduce((a,p)=>a+p[k],0);
-  $("evPay").innerHTML=ps.length?`<span><b>${fmt(S("owing"))}</b> order${S("owing")===1?"":"s"} owing <b>${money(S("owed"))}</b></span><span><b>${fmt(S("inc"))}</b> incomplete registration${S("inc")===1?"":"s"}</span><span>${fmt(S("paid"))} paid · ${fmt(S("free"))} complimentary</span>${(()=>{const t=tixSum(evs.map(e=>e.code));return t&&t.sold?`<span>Average ticket <b>${money0(t.rev/t.sold)}</b> across ${fmt(t.sold)} paid tickets</span>`:""})()}<span style="flex:1"></span>${PAY_LEGEND}`:"";
+  // Two labelled lines: orders (one order can cover several tickets) and tickets.
+  const t=tixSum(evs.map(e=>e.code));
+  $("evPay").innerHTML=ps.length?`<div class="psrow"><span class="pl">Orders</span><span>${fmt(S("paid"))} paid · ${fmt(S("free"))} complimentary · <b class="ow">${fmt(S("owing"))} owing ${money(S("owed"))}</b> · ${fmt(S("inc"))} incomplete</span><span style="flex:1"></span>${PAY_LEGEND}</div>${t&&t.sold?`<div class="psrow"><span class="pl">Tickets</span><span>${fmt(t.sold)} paid tickets · average <b>${money0(t.rev/t.sold)}</b> each, before tax <span class="muted">(sponsorship and free tickets left out)</span></span></div>`:""}`:"";
   $("evNote").textContent="Registrations update every hour from PheedLoop and don't change with the month picker. Click an event for its month-end registration curve. Where last year's event is linked, the marker on the bar shows where registrations would be at last year's pace toward this year's target. "+TIX_NOTE;
   $("evTable").querySelectorAll("tr.ev").forEach(tr=>{
     const toggle=()=>{const i=+tr.dataset.i,d=$("evTable").querySelector(`tr[data-d="${i}"]`),open=tr.getAttribute("aria-expanded")==="true";tr.setAttribute("aria-expanded",!open);d.hidden=open;
