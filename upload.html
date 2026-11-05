@@ -204,6 +204,7 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
   <section class="card" id="reportCard" hidden>
     <h2>11. Event attendee reports</h2>
     <p>Build a full report of who attended an event: every person matched to their company in Insightly, whether that company is a member, its business type (WD, wholesaler, manufacturer, shop…), sector (mechanical, collision, tire), WD affiliation and I-CAR status, plus the event's registration and money figures. The report is at <a href="report.html">Event reports</a>; the dashboard shows the totals and links to it.</p>
+    <p><b>Reports build themselves:</b> the day after an event ends, its report is built from PheedLoop, then refreshed every day for two weeks to pick up late check-ins and guest names. You only need this section to upload a fuller guest list (it then replaces the automatic one and isn't overwritten) or to rebuild sooner.</p>
     <div class="row"><label for="rpEvent">Event</label><select id="rpEvent"></select></div>
     <div class="row"><button id="rpPull" type="button">Pull attendees from PheedLoop</button><span class="muted">Quickest: names, companies, titles, emails and check-ins straight from PheedLoop.</span></div>
     <div class="row"><label for="rpFile">Or upload PheedLoop's attendee report</label><input id="rpFile" type="file" accept=".csv,.xlsx,.xls"></div>

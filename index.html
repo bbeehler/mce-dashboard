@@ -393,7 +393,7 @@ html{scroll-behavior:smooth}
     <div class="card" id="sponsCard"><h3>Sponsorship revenue by event <span class="sub" id="spSub"></span></h3><div class="spons" id="spons"></div>
       <div class="legend"><span><i class="sw" style="--c:var(--s1)"></i>Invoiced this year</span><span><i style="--c:var(--ink-2);width:2px;height:12px;border-radius:1px"></i>Last year, same event</span></div><p class="note" id="spNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
-    <div class="card" id="whoCard"><h3>Who attended <span class="sub">· attendees matched to their company in Insightly</span></h3><div class="tblwrap"><table class="mini" id="whoTable"></table></div><p class="note">Membership is the company's status in Insightly for the event's year. <a href="report.html">Open the full attendee reports</a> (passcode needed) for every company and person, follow-up lists and business-type breakdowns. Build a report on the <a href="upload.html#reportCard">Upload data page</a>.</p></div>
+    <div class="card" id="whoCard"><h3>Who attended <span class="sub">· attendees matched to their company in Insightly</span></h3><div class="tblwrap"><table class="mini" id="whoTable"></table></div><p class="note">Membership is the company's status in Insightly for the event's year. <a href="report.html">Open the full attendee reports</a> (passcode needed) for every company and person, follow-up lists and business-type breakdowns. Reports build automatically the day after each event and refresh daily for two weeks.</p></div>
   </section>
 
   <section class="stream" id="membership" aria-labelledby="mbH">
@@ -1081,7 +1081,7 @@ const WHO_ST=[["Member","--s1"],["Lapsed member","--s4"],["Not a member","--s2"]
 function renderWho(){
   const host=$("whoTable");if(!host)return;
   const rows=(D.reports||[]).map(r=>({r,e:D.events.find(e=>e.code===r.event_code)})).filter(x=>x.e).sort((a,b)=>b.e.start_date.localeCompare(a.e.start_date));
-  if(!rows.length){host.innerHTML='<tbody><tr><td class="empty-note">No attendee reports yet. Build one on the <a href="upload.html#reportCard">Upload data page</a> (one click pulls the attendee list from PheedLoop).</td></tr></tbody>';return}
+  if(!rows.length){host.innerHTML='<tbody><tr><td class="empty-note">No attendee reports yet. They build automatically the day after each event.</td></tr></tbody>';return}
   const topOf=(o,skip)=>Object.entries(o||{}).filter(([k])=>!skip.test(k)).sort((a,b)=>b[1]-a[1]).slice(0,3);
   const TL={"Automotive Service Provider":"Shops","Wholesaler":"Wholesalers","Warehouse Distributor":"WDs","Manufacturer":"Manufacturers","Major Retailers":"Retailers","Strategic Business Partners":"Business partners","Industry Engagement Network affiliate":"IEN affiliates"};
   host.innerHTML=`<thead><tr><th>Event</th><th class="num">People</th><th style="min-width:200px">Membership</th><th class="num">Member share</th><th>Top business types</th><th>Sector</th><th></th></tr></thead><tbody>`+rows.map(({r,e})=>{

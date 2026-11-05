@@ -5,6 +5,8 @@
 //        rows: {first_name,last_name,email,title,company,province,reg_category,checked_in}
 //   POST {action:"get", passcode, event_code}   -> the full report (people included)
 //   POST {action:"delete", passcode, event_code}
+//   POST {action:"auto", token}   -> scheduled: builds or refreshes reports for events that ended in the last 14 days
+//        (once a day each, from PheedLoop). Reports built from an uploaded file are never replaced.
 //
 // "build" and "delete" need the upload passcode (MCE_UPLOAD_PASSCODE). "get" accepts the upload passcode or the
 // Ask-the-data passcode (MCE_ASK_PASSCODE). People are stored in event_attendees, which the browser can't read;
@@ -28,9 +30,9 @@ async function same(given: unknown, real?: string) {
   const [a, b] = await Promise.all([sha(given), sha(real)]); let d = 0; for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i]; return d === 0;
 }
 const isUpload = (p: unknown) => same(p, Deno.env.get("MCE_UPLOAD_PASSCODE"));
-// Maintenance token: lets a scheduled database job rebuild a report. Only works while a token is stored in
-// app_settings (service role only); normally there is none.
-async function testToken(t: unknown) { if (typeof t !== "string" || t.length < 20) return false; const { data } = await db.from("app_settings").select("value").eq("key", "event_report_test_token").maybeSingle(); return !!data?.value && data.value === t; }
+// Token for the scheduled job (pg_cron) that builds reports automatically. It lives in app_settings, which only the
+// service role can read, so only the database itself can use it.
+async function autoToken(t: unknown) { if (typeof t !== "string" || t.length < 20) return false; const { data } = await db.from("app_settings").select("value").eq("key", "event_report_auto_token").maybeSingle(); return !!data?.value && data.value === t; }
 const canView = async (p: unknown) => (await isUpload(p)) || (await same(p, Deno.env.get("MCE_ASK_PASSCODE")));
 
 // ---------- text helpers ----------
@@ -178,7 +180,40 @@ function totals(rows: any[]) {
   return T;
 }
 
+let INSIGHTLY: ReturnType<typeof insightly> | null = null;
+async function buildReport(ev: { code: string; start_date: string }, source: "pheedloop" | "upload", upRows?: any[], filename?: unknown) {
+  const code = ev.code;
+  let src: any[];
+  if (source === "pheedloop") src = await fromPheedLoop(code);
+  else {
+    if (!Array.isArray(upRows) || !upRows.length || upRows.length > 5000) throw new Error("The file has no attendee rows (or more than 5,000).");
+    src = upRows.map((r: any) => ({ ...r, province: province(r.province, r.country) }));
+  }
+  if (!src.length) throw new Error("PheedLoop has no attendees for this event yet.");
+  const year = +String(ev.start_date).slice(0, 4);
+  const { orgs, contacts } = await (INSIGHTLY ??= insightly());   // read once per run, shared by every event built
+  const match = matcher(buildIndex(orgs, contacts), year);
+  const rows = src.map((a: any, i: number) => {
+    const email = clean(a.email, 200)?.toLowerCase() ?? null, company = clean(a.company);
+    const m: any = match({ email, company });
+    return {
+      event_code: code, idx: i, first_name: clean(a.first_name, 80), last_name: clean(a.last_name, 80), email, title: clean(a.title), company,
+      province: a.province || (m.org ? province(m.org.province) : null), reg_category: clean(a.reg_category, 120), checked_in: a.checked_in == null ? null : !!a.checked_in,
+      org_id: m.org?.id ?? null, org_name: m.org?.name ?? null, match_method: m.method || null, match_confidence: m.conf || null,
+      member_status: m.status, member_last_year: m.org ? (m.last || null) : null, via_parent: m.via,
+      business_type: m.org?.type || null, sector: m.org?.sector || null, segment: m.org?.segment || null, wd_affiliation: m.org?.wd || null, icar: m.org?.icar || null,
+    };
+  });
+  const T = totals(rows);
+  const { error: e1 } = await db.from("event_reports").upsert({ event_code: code, source, filename: source === "upload" ? clean(filename) : null, member_year: year, totals: T, built_at: new Date().toISOString() }, { onConflict: "event_code" });
+  if (e1) throw new Error(e1.message);
+  await db.from("event_attendees").delete().eq("event_code", code);
+  for (let i = 0; i < rows.length; i += 500) { const { error } = await db.from("event_attendees").insert(rows.slice(i, i + 500)); if (error) throw new Error(error.message); }
+  return { attendees: rows.length, members: T.status["Member"] ?? 0, matched: rows.filter((r) => r.org_id).length };
+}
+
 Deno.serve(async (req) => {
+  INSIGHTLY = null;   // fresh Insightly data for every request
   const h = cors(req.headers.get("origin") ?? "");
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
   let body: any; try { body = await req.json(); } catch { return json({ error: "The request wasn't readable." }, 400, h); }
@@ -196,7 +231,25 @@ Deno.serve(async (req) => {
   }
   if (body.action === "check") return json({ ok: await canView(body.passcode) }, 200, h);
 
-  if (!(await isUpload(body.passcode)) && !(await testToken(body.test_token))) { await slow(); return json({ error: "That passcode isn't right." }, 401, h); }
+  if (body.action === "auto") {
+    if (!(await autoToken(body.token))) { await slow(); return json({ error: "Not allowed." }, 401, h); }
+    // Events that ended between 1 and 14 days ago (Toronto time), not test events, whose report is missing or more
+    // than 20 hours old and wasn't built from an uploaded file. Insightly is read once per run, so several events fit.
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(new Date());
+    const from = new Date(Date.parse(today) - 14 * 864e5).toISOString().slice(0, 10);
+    const { data: evs } = await db.from("events").select("code,name,start_date,end_date,merged_into").gte("end_date", from).lt("end_date", today).is("merged_into", null);
+    const { data: reps } = await db.from("event_reports").select("event_code,source,built_at");
+    const due = (evs ?? []).filter((e: any) => !/\btest(ing)?\b/i.test(e.name ?? "")).filter((e: any) => {
+      const r = (reps ?? []).find((x: any) => x.event_code === e.code);
+      return !r || (r.source !== "upload" && Date.now() - Date.parse(r.built_at) > 20 * 3600e3);
+    }).sort((a: any, b: any) => String(a.end_date).localeCompare(String(b.end_date))).slice(0, 6);
+    const done: any[] = [];
+    for (const e of due) { try { done.push({ code: e.code, ...(await buildReport(e, "pheedloop")) }); } catch (err) { done.push({ code: e.code, error: String((err as Error).message).slice(0, 200) }); } }
+    await db.from("sync_log").insert({ source: "event_reports", started_at: new Date().toISOString(), finished_at: new Date().toISOString(), ok: done.every((d) => !d.error), events_seen: due.length, events_written: done.filter((d) => !d.error).length, note: done.length ? done.map((d) => `${(evs ?? []).find((e: any) => e.code === d.code)?.name}: ${d.error ?? d.attendees + " people"}`).join("; ").slice(0, 500) : "nothing due" });
+    return json({ ok: true, built: done }, 200, h);
+  }
+
+  if (!(await isUpload(body.passcode))) { await slow(); return json({ error: "That passcode isn't right." }, 401, h); }
   if (!code) return json({ error: "Choose an event." }, 400, h);
   const { data: ev } = await db.from("events").select("code,name,start_date").eq("code", code).maybeSingle();
   if (!ev) return json({ error: "That event wasn't found." }, 404, h);
@@ -205,33 +258,8 @@ Deno.serve(async (req) => {
   if (body.action !== "build") return json({ error: "Unknown action." }, 400, h);
 
   try {
-    let src: any[];
-    if (body.source === "pheedloop") src = await fromPheedLoop(code);
-    else {
-      if (!Array.isArray(body.rows) || !body.rows.length || body.rows.length > 5000) return json({ error: "The file has no attendee rows (or more than 5,000)." }, 400, h);
-      src = body.rows.map((r: any) => ({ ...r, province: province(r.province, r.country) }));
-    }
-    if (!src.length) return json({ error: "PheedLoop has no attendees for this event yet." }, 400, h);
-    const year = +String(ev.start_date).slice(0, 4);
-    const { orgs, contacts } = await insightly();
-    const match = matcher(buildIndex(orgs, contacts), year);
-    const rows = src.map((a: any, i: number) => {
-      const email = clean(a.email, 200)?.toLowerCase() ?? null, company = clean(a.company);
-      const m: any = match({ email, company });
-      return {
-        event_code: code, idx: i, first_name: clean(a.first_name, 80), last_name: clean(a.last_name, 80), email, title: clean(a.title), company,
-        province: a.province || (m.org ? province(m.org.province) : null), reg_category: clean(a.reg_category, 120), checked_in: a.checked_in == null ? null : !!a.checked_in,
-        org_id: m.org?.id ?? null, org_name: m.org?.name ?? null, match_method: m.method || null, match_confidence: m.conf || null,
-        member_status: m.status, member_last_year: m.org ? (m.last || null) : null, via_parent: m.via,
-        business_type: m.org?.type || null, sector: m.org?.sector || null, segment: m.org?.segment || null, wd_affiliation: m.org?.wd || null, icar: m.org?.icar || null,
-      };
-    });
-    const T = totals(rows);
-    const { error: e1 } = await db.from("event_reports").upsert({ event_code: code, source: body.source === "pheedloop" ? "pheedloop" : "upload", filename: clean(body.filename), member_year: year, totals: T, built_at: new Date().toISOString() }, { onConflict: "event_code" });
-    if (e1) throw new Error(e1.message);
-    await db.from("event_attendees").delete().eq("event_code", code);
-    for (let i = 0; i < rows.length; i += 500) { const { error } = await db.from("event_attendees").insert(rows.slice(i, i + 500)); if (error) throw new Error(error.message); }
-    return json({ ok: true, attendees: rows.length, members: T.status["Member"] ?? 0, matched: rows.filter((r) => r.org_id).length }, 200, h);
+    const r = await buildReport(ev, body.source === "pheedloop" ? "pheedloop" : "upload", body.rows, body.filename);
+    return json({ ok: true, ...r }, 200, h);
   } catch (e) {
     return json({ error: String((e as Error).message ?? e).slice(0, 300) }, 502, h);
   }
