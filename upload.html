@@ -201,6 +201,18 @@ ol{margin:0;padding-left:20px;display:grid;gap:4px}
     <div id="mtMsg"></div>
   </section>
 
+  <section class="card" id="reportCard" hidden>
+    <h2>11. Event attendee reports</h2>
+    <p>Build a full report of who attended an event: every person matched to their company in Insightly, whether that company is a member, its business type (WD, wholesaler, manufacturer, shop…), sector (mechanical, collision, tire), WD affiliation and I-CAR status, plus the event's registration and money figures. The report is at <a href="report.html">Event reports</a>; the dashboard shows the totals and links to it.</p>
+    <div class="row"><label for="rpEvent">Event</label><select id="rpEvent"></select></div>
+    <div class="row"><button id="rpPull" type="button">Pull attendees from PheedLoop</button><span class="muted">Quickest: names, companies, titles, emails and check-ins straight from PheedLoop.</span></div>
+    <div class="row"><label for="rpFile">Or upload PheedLoop's attendee report</label><input id="rpFile" type="file" accept=".csv,.xlsx,.xls"></div>
+    <div id="rpMap" hidden></div>
+    <div id="rpMsg"></div>
+    <div class="tbl" style="max-height:none"><table id="rpList"></table></div>
+    <p class="muted">People's details stay private: only someone with the Ask-the-data or upload passcode can open the full report. The public dashboard only gets totals.</p>
+  </section>
+
   <section class="card">
     <h2>Recent uploads</h2>
     <div id="history" class="muted">Enter the passcode to see upload history.</div>
@@ -253,7 +265,7 @@ async function call(action,extra={}){
   return j;
 }
 const store={get(){try{return localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{v?localStorage.setItem("mce-passcode",v):localStorage.removeItem("mce-passcode")}catch(e){}}};
-function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;$("briefCard").hidden=!on;$("linkedinCard").hidden=!on;$("metaCard").hidden=!on;if(on){loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes();loadBrief();loadLinkedIn();loadMeta()}else $("history").textContent="Enter the passcode to see upload history."}
+function showUnlocked(on){$("lockedBox").hidden=on;$("unlockedBox").hidden=!on;$("uploadCard").hidden=!on;$("targetsCard").hidden=!on;$("attendanceCard").hidden=!on;$("sentimentCard").hidden=!on;$("notesCard").hidden=!on;$("briefCard").hidden=!on;$("linkedinCard").hidden=!on;$("metaCard").hidden=!on;$("reportCard").hidden=!on;if(on){loadReports();loadHistory();loadTargets();loadAttendance();loadSentiment();loadNotes();loadBrief();loadLinkedIn();loadMeta()}else $("history").textContent="Enter the passcode to see upload history."}
 async function tryPasscode(code,quiet){
   passcode=code;
   try{await call("check");store.set(code);msg("authMsg","","");showUnlocked(true)}
@@ -614,6 +626,61 @@ async function loadMeta(){
 $("mtConnect").onclick=async()=>{$("mtConnect").disabled=true;msg("mtMsg","warn","Opening Facebook…");
   try{const r=await mtCall("start");location.href=r.url}catch(e){msg("mtMsg","err",esc(e.message));$("mtConnect").disabled=false}};
 
+
+/* ---------- event attendee reports ---------- */
+const RP_FN="https://cyeirmvdstdhcbuyghvv.supabase.co/functions/v1/event-report";
+let RP={events:[],reports:[],rows:null,cols:[],file:null};
+async function rpCall(body){const r=await fetch(RP_FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,passcode})});
+  const j=await r.json().catch(()=>({error:"The report service didn't answer properly."}));if(!r.ok||j.error)throw Object.assign(new Error(j.error||`Error ${r.status}`),{status:r.status});return j}
+const dShort=s=>new Date(s+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"});
+async function loadReports(){
+  try{const [evs,reps]=await Promise.all([sbGet("events?select=code,name,start_date,merged_into&order=start_date.desc"),sbGet("event_reports?select=event_code,built_at,source,filename,totals")]);
+    RP.events=evs.filter(e=>!e.merged_into&&!/\btest(ing)?\b/i.test(e.name||""));RP.reports=reps}catch(e){RP.events=[];RP.reports=[]}
+  const today=new Date().toISOString().slice(0,10),past=RP.events.filter(e=>e.start_date<=today),next=RP.events.filter(e=>e.start_date>today).reverse();
+  const cur=$("rpEvent").value;
+  $("rpEvent").innerHTML=`<optgroup label="Held">${past.map(e=>`<option value="${e.code}">${esc(e.name)} · ${dShort(e.start_date)}</option>`).join("")}</optgroup><optgroup label="Upcoming">${next.map(e=>`<option value="${e.code}">${esc(e.name)} · ${dShort(e.start_date)}</option>`).join("")}</optgroup>`;
+  if(cur)$("rpEvent").value=cur;
+  const name=c=>(RP.events.find(e=>e.code===c)||{}).name||c;
+  $("rpList").innerHTML=RP.reports.length?`<thead><tr><th>Report</th><th style="text-align:right">People</th><th style="text-align:right">Members</th><th>Built</th><th></th></tr></thead><tbody>${RP.reports.sort((a,b)=>b.built_at.localeCompare(a.built_at)).map(r=>{const T=r.totals||{},m=(T.status||{}).Member||0;
+    return `<tr><td>${esc(name(r.event_code))}<div class="muted">${r.source==="pheedloop"?"From PheedLoop":"Uploaded "+esc(r.filename||"file")}</div></td><td class="n">${fmt(T.attendees)}</td><td class="n">${fmt(m)} <span class="muted">(${T.attendees?Math.round(m/T.attendees*100):0}%)</span></td><td>${new Date(r.built_at).toLocaleDateString("en-CA",{month:"short",day:"numeric"})}</td><td style="white-space:nowrap"><a class="btn ghost" href="report.html?event=${r.event_code}" target="_blank" rel="noopener">Open</a> <button class="ghost" type="button" data-rb="${r.event_code}">Rebuild</button> <button class="ghost" type="button" data-del="${r.event_code}">Delete</button></td></tr>`}).join("")}</tbody>`:'<tbody><tr><td class="muted">No attendee reports yet.</td></tr></tbody>';
+  $("rpList").querySelectorAll("[data-rb]").forEach(b=>b.onclick=()=>{$("rpEvent").value=b.dataset.rb;const r=RP.reports.find(x=>x.event_code===b.dataset.rb);if(r&&r.source!=="pheedloop")msg("rpMsg","warn","This report came from a file: upload the file again to rebuild it, or pull from PheedLoop instead.");else rpBuild({source:"pheedloop"})});
+  $("rpList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm(`Delete the attendee report for ${name(b.dataset.del)}? The people in it are removed too.`))return;
+    try{await rpCall({action:"delete",event_code:b.dataset.del});msg("rpMsg","ok","Report deleted.");loadReports()}catch(e){msg("rpMsg","err",esc(e.message))}});
+}
+async function rpBuild(extra){
+  const code=$("rpEvent").value;if(!code){msg("rpMsg","err","Choose the event.");return}
+  const ev=RP.events.find(e=>e.code===code);
+  ["rpPull","rpBuild"].forEach(id=>{if($(id))$(id).disabled=true});
+  msg("rpMsg","warn",`Matching ${esc(ev?ev.name:"the event")}'s attendees to Insightly… this takes about 30 seconds.`);
+  try{const r=await rpCall({action:"build",event_code:code,...extra});
+    msg("rpMsg","ok",`Done: ${fmt(r.attendees)} people, ${fmt(r.matched)} matched to a company in Insightly, ${fmt(r.members)} from member companies. <a href="report.html?event=${code}" target="_blank" rel="noopener">Open the report</a>.`);
+    $("rpMap").hidden=true;$("rpFile").value="";RP.rows=null;loadReports()}
+  catch(e){if(e.status===401){showUnlocked(false);msg("authMsg","err","The passcode has changed. Enter the new one.")}msg("rpMsg","err",`Not built: ${esc(e.message)}`)}
+  ["rpPull","rpBuild"].forEach(id=>{if($(id))$(id).disabled=false});
+}
+$("rpPull").onclick=()=>rpBuild({source:"pheedloop"});
+// Columns in PheedLoop's attendee report (English or French). Each field is guessed from the header and can be changed.
+const RP_FIELDS=[["first_name","First name",/^(first|pr[ée]nom|given)/i],["last_name","Last name",/^(last|nom de famille|surname|family|nom$)/i],["full_name","Full name (if no first/last)",/^(name|full ?name|attendee( name)?|nom complet)$/i],["email","Email",/e-?mail|courriel/i],["company","Company / organization",/organi[sz]ation|company|entreprise|employer|compagnie|soci[ée]t[ée]/i],["title","Title",/^(job )?title|titre|position|poste/i],["reg_category","Registration type",/categor|ticket|registration type|type d.inscription|badge type|attendee type|billet/i],["checked_in","Checked in",/check(ed)?.?in|attended|pr[ée]sen|attendance|enregistr/i],["province","Province / state",/province|state|r[ée]gion/i],["country","Country",/country|pays/i]];
+$("rpFile").onchange=async ev=>{
+  const f=ev.target.files[0];if(!f)return;$("rpMap").hidden=true;
+  try{const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+    let hi=0,best=0;for(let i=0;i<Math.min(15,raw.length);i++){const sc=raw[i].filter(c=>RP_FIELDS.some(([, ,re])=>re.test(String(c)))).length;if(sc>best){best=sc;hi=i}}
+    if(best<2)throw new Error("Couldn't find the column headings (looked for First name, Last name, Email, Organization…).");
+    RP.cols=raw[hi].map(c=>String(c).trim());RP.data=raw.slice(hi+1).filter(r=>r.some(c=>String(c).trim()));RP.file=f.name;
+    const guess=Object.fromEntries(RP_FIELDS.map(([k, ,re])=>[k,RP.cols.findIndex(c=>re.test(c))]));
+    if(guess.full_name>=0&&(guess.full_name===guess.first_name||guess.full_name===guess.last_name))guess.full_name=-1;
+    $("rpMap").innerHTML=`<p><b>${fmt(RP.data.length)} rows</b> in ${esc(f.name)}. Check the columns, then build the report.</p><div class="stats" style="margin-top:8px">${RP_FIELDS.map(([k,l])=>`<label style="display:grid;gap:4px;font-weight:500">${l}<select data-f="${k}" style="min-width:0"><option value="-1">(not in file)</option>${RP.cols.map((c,i)=>`<option value="${i}" ${guess[k]===i?"selected":""}>${esc(c||"Column "+(i+1))}</option>`).join("")}</select></label>`).join("")}</div><div class="row" style="margin-top:10px"><button id="rpBuild" type="button">Build report from this file</button></div>`;
+    $("rpMap").hidden=false;$("rpBuild").onclick=()=>{
+      const m=Object.fromEntries([...$("rpMap").querySelectorAll("select")].map(s=>[s.dataset.f,+s.value]));
+      const v=(r,k)=>m[k]>=0?String(r[m[k]]??"").trim():"";
+      const yes=s=>/^(yes|oui|true|y|1|x|checked in|présent|present)$/i.test(s)||(/\d{4}-\d{2}-\d{2}|\d+\/\d+\/\d+/.test(s));
+      const rows=RP.data.map(r=>{let fn=v(r,"first_name"),ln=v(r,"last_name");if(!fn&&!ln&&v(r,"full_name")){const p=v(r,"full_name").split(/\s+/);fn=p.shift()||"";ln=p.join(" ")}
+        return{first_name:fn,last_name:ln,email:v(r,"email"),company:v(r,"company"),title:v(r,"title"),reg_category:v(r,"reg_category"),checked_in:m.checked_in>=0?yes(v(r,"checked_in")):null,province:v(r,"province"),country:v(r,"country")}}).filter(r=>r.first_name||r.last_name||r.email);
+      if(!rows.length){msg("rpMsg","err","No attendee rows found with those columns.");return}
+      rpBuild({source:"upload",filename:RP.file,rows});
+    };
+  }catch(e){msg("rpMsg","err",esc(e.message||"That file couldn't be read."))}
+};
 async function loadHistory(){
   let data;try{data=(await call("history")).uploads}catch(e){$("history").textContent="Upload history isn't available right now.";return}
   $("history").innerHTML=data.length?`<div class="tbl"><table><thead><tr><th>Month</th><th>Uploaded</th><th>File</th><th style="text-align:right">Numbers</th></tr></thead><tbody>${data.map(u=>`<tr><td>${monthLabel(u.period)}</td><td>${new Date(u.uploaded_at).toLocaleString("en-CA",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</td><td>${esc(u.filename||"")}</td><td class="n">${fmt(u.rows_written)}</td></tr>`).join("")}</tbody></table></div>`:"No uploads yet.";

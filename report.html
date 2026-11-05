@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Event Attendee Report · MCE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --page:#f3f4f7; --surface:#ffffff; --ink:#0f1730; --ink-2:#4a5368; --muted:#868d9c; --grid:#e6e8ee; --ring:rgba(15,23,48,.09); --wash:#f6f7fa;
+  --brand:#1b2a5a; --brand-ink:#ffffff; --brand-2:#9fb4e6; --red:#e31b4b;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --seq-soft:#cde2fb;
+  --good:#0ca30c; --good-ink:#006300; --warn:#fab219; --serious:#ec835a; --crit-ink:#b42323;
+  --good-bg:#e6f5e6; --warn-bg:#fff4dc; --serious-bg:#fdebe3; --crit-bg:#fbe5e5;
+  --st-member:#2a78d6; --st-lapsed:#eda100; --st-non:#eb6834; --st-none:#aab0bd;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif; --body:"Public Sans","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --page:#0d0f14; --surface:#171a21; --ink:#f2f4f8; --ink-2:#c3c8d3; --muted:#8b92a1; --grid:#262a33; --ring:rgba(255,255,255,.09); --wash:#1d212a;
+  --brand:#141f45; --red:#ff4d73; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --seq-soft:#1c3150;
+  --good-ink:#3fcf3f; --crit-ink:#ff7b7b; --good-bg:#14301a; --warn-bg:#3a2e10; --serious-bg:#3a2216; --crit-bg:#3d1a1a;
+  --st-member:#3987e5; --st-lapsed:#c98500; --st-non:#d95926; --st-none:#5b616e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#0d0f14; --surface:#171a21; --ink:#f2f4f8; --ink-2:#c3c8d3; --muted:#8b92a1; --grid:#262a33; --ring:rgba(255,255,255,.09); --wash:#1d212a;
+  --brand:#141f45; --red:#ff4d73; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --seq-soft:#1c3150;
+  --good-ink:#3fcf3f; --crit-ink:#ff7b7b; --good-bg:#14301a; --warn-bg:#3a2e10; --serious-bg:#3a2216; --crit-bg:#3d1a1a;
+  --st-member:#3987e5; --st-lapsed:#c98500; --st-non:#d95926; --st-none:#5b616e; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--body);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+a{color:var(--s1)}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:24px}
+@media (max-width:560px){.wrap{padding-inline:16px}}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.band{background:var(--brand);color:var(--brand-ink);border-bottom:4px solid var(--red)}
+.band .wrap{padding-block:22px 20px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brand-2);font-weight:600}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,3.2vw,32px);letter-spacing:-.01em;margin:4px 0 0;text-wrap:balance}
+.band .sub{color:var(--brand-2);font-size:13px;margin-top:4px}
+.controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.controls label{display:grid;gap:4px;font-size:11.5px;color:var(--brand-2);letter-spacing:.04em}
+.controls select{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 10px;min-width:240px;max-width:80vw}
+.controls select option{color:#0f1730}
+.bbtn{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+.bbtn:hover{background:rgba(255,255,255,.08)}
+main.wrap{display:grid;gap:20px;padding-block:20px 56px}
+main.wrap>*{min-width:0}
+
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:18px;min-width:0}
+h2{font-family:var(--display);font-size:20px;font-weight:700;margin:0 0 4px}
+h3{font-size:13px;font-weight:600;margin:0 0 10px}
+.lead{color:var(--ink-2);margin:0 0 14px;font-size:13px}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{display:grid;gap:4px;align-content:start}
+.kpi .k{font-size:12px;color:var(--ink-2);font-weight:500}
+.kpi .v{font-family:var(--display);font-size:28px;font-weight:700;line-height:1.05}
+.kpi .v small{font-family:var(--body);font-size:13px;font-weight:500;color:var(--muted)}
+.kpi .d{font-size:12px;color:var(--ink-2)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%}
+.pill.Member{background:color-mix(in srgb,var(--st-member) 16%,transparent);color:color-mix(in srgb,var(--st-member) 70%,var(--ink))}
+.pill.Lapsed{background:color-mix(in srgb,var(--st-lapsed) 20%,transparent);color:color-mix(in srgb,var(--st-lapsed) 55%,var(--ink))}
+.pill.Non{background:color-mix(in srgb,var(--st-non) 16%,transparent);color:color-mix(in srgb,var(--st-non) 65%,var(--ink))}
+.pill.None{background:var(--wash);color:var(--muted)}
+.pill.poss{background:var(--warn-bg);color:color-mix(in srgb,var(--warn) 55%,var(--ink))}
+.up{color:var(--good-ink)} .down{color:var(--crit-ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}}
+/* split bar of membership status */
+.split{display:flex;height:18px;border-radius:6px;overflow:hidden;background:var(--wash);margin:6px 0 10px}
+.split i{display:block;height:100%}
+.split i+i{border-left:2px solid var(--surface)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+/* horizontal bars */
+.hbars{display:grid;gap:7px}
+.hb{display:grid;grid-template-columns:minmax(110px,190px) 1fr 74px;gap:10px;align-items:center;font-size:12.5px}
+.hb .l{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .t{height:14px;background:var(--wash);border-radius:4px;display:flex;overflow:hidden}
+.hb .t i{display:block;height:100%}
+.hb .n{text-align:right;white-space:nowrap}
+.hb .n small{color:var(--muted)}
+@media (max-width:560px){.hb{grid-template-columns:minmax(90px,120px) 1fr 60px}}
+/* tables */
+.tblwrap{overflow-x:auto;border:1px solid var(--grid);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:820px;font-size:13px}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:9px 10px;border-bottom:1px solid var(--grid);background:var(--wash);position:sticky;top:0;cursor:pointer;white-space:nowrap}
+th[aria-sort]::after{content:" ▾";color:var(--ink-2)}
+th[aria-sort="ascending"]::after{content:" ▴"}
+td{padding:9px 10px;border-bottom:1px solid var(--grid);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;white-space:nowrap}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.scroll{max-height:640px;overflow:auto}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.filters input[type=search],.filters select{border:1px solid var(--grid);background:var(--surface);border-radius:8px;padding:7px 10px;min-width:200px}
+.btn{border:1px solid var(--grid);background:var(--surface);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600}
+.btn:hover{background:var(--wash)}
+.btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.seg{display:inline-flex;border:1px solid var(--grid);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:7px 11px;cursor:pointer;font-size:12.5px}
+.seg button+button{border-left:1px solid var(--grid)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.lock{max-width:440px;margin:40px auto}
+.lock input{width:100%;border:1px solid var(--grid);border-radius:8px;padding:10px 12px;margin:8px 0 10px;background:var(--surface)}
+.err{color:var(--crit-ink);font-size:13px}
+.empty{color:var(--muted);font-size:13px;padding:8px 0}
+.jump{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px}
+.jump a{text-decoration:none;color:var(--ink-2)}
+.jump a:hover{color:var(--s1)}
+#tip{position:fixed;z-index:60;background:var(--ink);color:var(--surface);font-size:12px;padding:7px 9px;border-radius:6px;pointer-events:none;max-width:280px}
+@media print{
+  body{background:#fff} .controls,.filters,.jump,#lockCard,.noprint{display:none!important}
+  .card{break-inside:avoid;border-color:#ddd} .scroll{max-height:none;overflow:visible} th{position:static}
+}
+</style>
+</head>
+<body>
+<script src="nav.js" data-current="reports"></script>
+<header class="band"><div class="wrap">
+  <div>
+    <div class="eyebrow">AIA Canada · Event attendee report</div>
+    <h1 id="evTitle">Event attendee report</h1>
+    <div class="sub" id="evSub">Who came, which companies they're from, and whether those companies are members.</div>
+  </div>
+  <div class="controls">
+    <label>Event <select id="evSel" aria-label="Event"></select></label>
+    <button class="bbtn" id="csvBtn" type="button" hidden>Download attendees (CSV)</button>
+    <button class="bbtn" id="pdfBtn" type="button" hidden>Download PDF</button>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <section class="card lock" id="lockCard">
+    <h2>Enter the passcode</h2>
+    <p class="lead">This report lists people by name, so it needs the Ask-the-data passcode or the upload passcode.</p>
+    <form id="lockForm"><input id="pass" type="password" autocomplete="current-password" placeholder="Passcode" aria-label="Passcode"><button class="btn primary" type="submit">Open the report</button></form>
+    <div class="err" id="lockErr"></div>
+  </section>
+
+  <div id="report" hidden>
+    <nav class="jump noprint" aria-label="Jump to"><a href="#glance">Event at a glance</a><a href="#who">Who attended</a><a href="#mix">Business type and sector</a><a href="#follow">Follow-up lists</a><a href="#companies">Companies</a><a href="#people">Attendees</a><a href="#notes">How this was built</a></nav>
+
+    <section class="card" id="glance" style="margin-top:14px">
+      <h2>Event at a glance</h2>
+      <p class="lead" id="glanceLead"></p>
+      <div class="kpis" id="evKpis"></div>
+    </section>
+
+    <section class="card" id="who" style="margin-top:20px">
+      <h2>Who attended</h2>
+      <p class="lead" id="whoLead"></p>
+      <div class="kpis" id="whoKpis"></div>
+      <h3 style="margin-top:18px">Attendees by membership <span class="muted" style="font-weight:400">· status of their company in Insightly for <span id="memYear"></span></span></h3>
+      <div class="split" id="statusBar" role="img"></div>
+      <div class="legend" id="statusLegend"></div>
+    </section>
+
+    <section class="grid2" id="mix" style="margin-top:20px">
+      <div class="card"><h3>Business type <span class="muted" style="font-weight:400">· attendees, coloured by membership</span></h3><div class="hbars" id="typeBars"></div></div>
+      <div class="card"><h3>Sector <span class="muted" style="font-weight:400">· mechanical, collision, tire</span></h3><div class="hbars" id="sectorBars"></div><p class="note">A company can be in more than one sector.</p></div>
+      <div class="card"><h3>Registration type</h3><div class="hbars" id="catBars"></div></div>
+      <div class="card"><h3>Province</h3><div class="hbars" id="provBars"></div></div>
+      <div class="card"><h3>WD affiliation <span class="muted" style="font-weight:400">· from Insightly</span></h3><div class="hbars" id="wdBars"></div></div>
+      <div class="card"><h3>Member companies by size <span class="muted" style="font-weight:400">· marketing segment</span></h3><div class="hbars" id="segBars"></div></div>
+    </section>
+
+    <section class="grid2" id="follow" style="margin-top:20px">
+      <div class="card"><h3>Lapsed members who came <span class="muted" style="font-weight:400">· win-back list</span></h3><div class="tblwrap scroll" style="max-height:520px"><table id="lapsedTbl" style="min-width:420px"></table></div></div>
+      <div class="card"><h3>Non-member companies who came <span class="muted" style="font-weight:400">· prospects, most attendees first</span></h3><div class="tblwrap scroll" style="max-height:520px"><table id="prospTbl" style="min-width:420px"></table></div></div>
+    </section>
+
+    <section class="card" id="companies" style="margin-top:20px">
+      <h2>Companies</h2>
+      <p class="lead" id="coLead"></p>
+      <div class="filters noprint"><input type="search" id="coQ" placeholder="Search companies" aria-label="Search companies"><span class="seg" id="coSeg"></span></div>
+      <div class="tblwrap scroll"><table id="coTbl"></table></div>
+    </section>
+
+    <section class="card" id="people" style="margin-top:20px">
+      <h2>Attendees</h2>
+      <p class="lead" id="pLead"></p>
+      <div class="filters noprint"><input type="search" id="pQ" placeholder="Search name, company or title" aria-label="Search attendees"><span class="seg" id="pSeg"></span><label class="small"><input type="checkbox" id="pPoss"> Possible matches only</label><label class="small" id="pChkWrap"><input type="checkbox" id="pChk"> Checked in only</label></div>
+      <div class="tblwrap scroll"><table id="pTbl"></table></div>
+    </section>
+
+    <section class="card" id="notes" style="margin-top:20px">
+      <h2>How this was built</h2>
+      <div id="notesBody" class="small" style="color:var(--ink-2)"></div>
+    </section>
+  </div>
+</main>
+<div id="tip" hidden></div>
+
+<script>
+const SUPABASE_URL="https://cyeirmvdstdhcbuyghvv.supabase.co";
+const SUPABASE_KEY="sb_publishable_PK9ID4XPE7qWUTsqpGtgrw_5-njCD0e";
+const FN=SUPABASE_URL+"/functions/v1/event-report";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=n=>n==null?"–":Math.round(n).toLocaleString("en-CA");
+const pct=(n,d=0)=>n==null||!isFinite(n)?"–":(n*100).toFixed(d)+"%";
+const money=n=>n==null?"–":"$"+Math.round(n).toLocaleString("en-CA");
+const dLong=s=>new Date(s+"T12:00:00").toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"});
+async function rest(t,q){const r=await fetch(`${SUPABASE_URL}/rest/v1/${t}?${q}`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});if(!r.ok)throw new Error(t);return r.json()}
+const tip=$("tip");function showTip(h,x,y){tip.innerHTML=h;tip.hidden=false;const r=tip.getBoundingClientRect();tip.style.left=Math.min(x+14,innerWidth-r.width-8)+"px";tip.style.top=Math.min(y+14,innerHeight-r.height-8)+"px"}const hideTip=()=>{tip.hidden=true};
+
+const ST=[["Member","Member","--st-member"],["Lapsed member","Lapsed","--st-lapsed"],["Not a member","Non","--st-non"],["Not in Insightly","None","--st-none"]];
+const stCls=s=>(ST.find(x=>x[0]===s)||ST[3])[1];
+const stPill=s=>`<span class="pill ${stCls(s)}">${esc(s)}</span>`;
+const TYPE_LABEL={"Automotive Service Provider":"Shop / service provider","Wholesaler":"Wholesaler (jobber)","Warehouse Distributor":"Warehouse distributor (WD)","Industry Engagement Network affiliate":"IEN affiliate"};
+const typeLabel=t=>TYPE_LABEL[t]||t;
+const store={get(){try{return localStorage.getItem("mce-ask-passcode")||localStorage.getItem("mce-passcode")}catch(e){return null}},set(v){try{localStorage.setItem("mce-ask-passcode",v)}catch(e){}}};
+const S={code:null,pass:null,report:null,people:[],ev:null,events:[],snaps:[],reports:[],coFilter:"all",pFilter:"all",sort:{co:["n",-1],p:["company",1]}};
+
+async function call(body){const r=await fetch(FN,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,passcode:S.pass})});const j=await r.json().catch(()=>({error:"The report service didn't answer."}));if(!r.ok||j.error)throw Object.assign(new Error(j.error||r.status),{status:r.status});return j}
+
+/* ---------- event stats (public tables) ---------- */
+function eventStats(code){
+  const ss=S.snaps.filter(s=>s.event_code===code).sort((a,b)=>a.period.localeCompare(b.period));
+  const regs=ss.reduce((a,s)=>Math.max(a,s.registrations||0),0);
+  const last=k=>{const s=[...ss].reverse().find(x=>x[k]!=null&&Number(x[k])>0);return s?Number(s[k]):null};
+  const tk=[...ss].reverse().find(x=>x.tickets_sold!=null), pay=[...ss].reverse().find(x=>x.orders!=null);
+  return{regs,att:last("attendance"),rev:last("revenue"),tk,pay};
+}
+function priorOf(ev){if(!ev.prior_code)return null;const p=S.events.find(e=>e.code===ev.prior_code);return p?(p.merged_into?S.events.find(e=>e.code===p.merged_into)||p:p):null}
+
+function renderGlance(){
+  const ev=S.ev,st=eventStats(ev.code),R=S.report.totals,pr=priorOf(ev),ps=pr?eventStats(pr.code):null;
+  const att=ev.attendance_manual??st.att??(R.checked_in||null);
+  const chg=(a,b)=>a!=null&&b?`<span class="${a>=b?"up":"down"}">${a>=b?"+":"−"}${Math.abs(Math.round((a-b)/b*100))}%</span> vs ${esc(pr.name)}`:"";
+  const k=[];
+  k.push({k:"Registered",v:fmt(st.regs),d:[ev.target_registrations?`${pct(st.regs/ev.target_registrations)} of ${fmt(ev.target_registrations)} target`:ev.capacity?`of ${fmt(ev.capacity)} capacity`:"",ps?chg(st.regs,ps.regs):""].filter(Boolean).join(" · ")});
+  k.push({k:"Attended",v:att!=null?fmt(att):"–",d:att&&st.regs?`${pct(att/st.regs)} of registered`+(ps&&(pr.attendance_manual??ps.att)?" · "+chg(att,pr.attendance_manual??ps.att):""):"Checked in at the door"});
+  k.push({k:"Revenue",v:money(st.rev),d:[ev.target_revenue?`${pct((st.rev||0)/ev.target_revenue)} of ${money(ev.target_revenue)} target`:"",ps?chg(st.rev,ps.rev):""].filter(Boolean).join(" · ")||"Charged incl. tax, less anything owing"});
+  if(st.tk&&st.tk.tickets_sold)k.push({k:"Average ticket",v:money(st.tk.ticket_revenue/st.tk.tickets_sold),d:`${fmt(st.tk.tickets_sold)} paid tickets, before tax`+(ps&&ps.tk&&ps.tk.tickets_sold?" · "+chg(st.tk.ticket_revenue/st.tk.tickets_sold,ps.tk.ticket_revenue/ps.tk.tickets_sold):"")});
+  if(st.tk)k.push({k:"Complimentary tickets",v:fmt((st.tk.tickets_comp||0)+(st.tk.tickets_sponsor_comp||0)),d:`${fmt(st.tk.tickets_sponsor_comp||0)} with sponsorships · ${fmt(st.tk.tickets_comp||0)} other comps`});
+  if(st.pay)k.push({k:"Payment",v:st.pay.orders_owing?fmt(st.pay.orders_owing)+"<small> owing</small>":"All settled",d:st.pay.orders_owing?`${money(st.pay.amount_owing)} still due · ${fmt(st.pay.orders_incomplete)} incomplete`:`${fmt(st.pay.orders_paid)} paid orders · ${fmt(st.pay.orders_incomplete)} incomplete`});
+  $("evKpis").innerHTML=k.map(x=>`<div class="kpi card" style="padding:14px"><span class="k">${x.k}</span><span class="v">${x.v}</span><span class="d">${x.d||""}</span></div>`).join("");
+  $("glanceLead").textContent=`Registration and money figures come live from PheedLoop${pr?`; comparisons are with ${pr.name}`:""}.`;
+}
+
+/* ---------- who attended ---------- */
+function bars(host,entries,opts={}){
+  const max=Math.max(...entries.map(e=>e.total),1);
+  host.innerHTML=entries.length?entries.map(e=>{const segs=(e.parts||[[e.total,"--s1"]]).filter(p=>p[0]>0);
+    return `<div class="hb" data-tip="${esc(`<b>${esc(e.label)}</b>`+(e.tip||`<div>${fmt(e.total)}</div>`))}"><span class="l" title="${esc(e.label)}">${esc(e.label)}</span><span class="t" style="width:${Math.max(2,e.total/max*100)}%">${segs.map(p=>`<i style="width:${p[0]/e.total*100}%;background:var(${p[1]})"></i>`).join("")}</span><span class="n">${fmt(e.total)}${opts.share?` <small>${pct(e.total/opts.share)}</small>`:""}</span></div>`}).join(""):'<p class="empty">Nothing recorded.</p>';
+  host.querySelectorAll("[data-tip]").forEach(el=>{el.addEventListener("mousemove",ev=>showTip(el.dataset.tip,ev.clientX,ev.clientY));el.addEventListener("mouseleave",hideTip)});
+}
+function byStatus(rows,keyFn,multi){
+  const m=new Map();
+  for(const r of rows){const ks=multi?keyFn(r):[keyFn(r)];for(const k of ks){const o=m.get(k)||{label:k,total:0,s:{}};o.total++;o.s[r.member_status]=(o.s[r.member_status]||0)+1;m.set(k,o)}}
+  return [...m.values()].sort((a,b)=>b.total-a.total).map(o=>({...o,parts:ST.map(([s,,c])=>[o.s[s]||0,c]),tip:ST.filter(([s])=>o.s[s]).map(([s])=>`<div>${esc(s)}: ${fmt(o.s[s])}</div>`).join("")}));
+}
+function renderWho(){
+  const P=S.people,R=S.report,T=R.totals,n=P.length,stc=s=>P.filter(p=>p.member_status===s).length;
+  const mem=stc("Member"),lap=stc("Lapsed member"),non=stc("Not a member"),none=stc("Not in Insightly");
+  const chk=P.filter(p=>p.checked_in).length,hasChk=P.some(p=>p.checked_in!=null);
+  const cos=companies(),memCos=cos.filter(c=>c.status==="Member").length;
+  $("memYear").textContent=R.member_year;
+  $("whoLead").textContent=`${fmt(n)} people in the ${R.source==="pheedloop"?"PheedLoop attendee list":"uploaded attendee report"}${R.filename?` (${R.filename})`:""}, matched to Insightly on ${new Date(R.built_at).toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})}.`;
+  const k=[
+    {k:"People",v:fmt(n),d:hasChk?`${fmt(chk)} checked in (${pct(chk/n)})`:""},
+    {k:"From member companies",v:fmt(mem),d:`${pct(mem/n)} of attendees`},
+    {k:"Lapsed members",v:fmt(lap),d:"Company was a member before"},
+    {k:"Non-members",v:fmt(non+none),d:`${fmt(non)} in Insightly · ${fmt(none)} not in Insightly`},
+    {k:"Companies",v:fmt(cos.length),d:`${fmt(memCos)} member companies (${pct(memCos/cos.length)})`},
+  ];
+  if(hasChk){const mc=P.filter(p=>p.member_status==="Member"&&p.checked_in).length,oc=P.filter(p=>p.member_status!=="Member"&&p.checked_in).length;k.push({k:"Show-up rate",v:pct(chk/n),d:`Members ${pct(mc/Math.max(1,mem))} · others ${pct(oc/Math.max(1,n-mem))}`})}
+  $("whoKpis").innerHTML=k.map(x=>`<div class="kpi card" style="padding:14px"><span class="k">${x.k}</span><span class="v">${x.v}</span><span class="d">${x.d}</span></div>`).join("");
+  const parts=[[mem,"Member"],[lap,"Lapsed member"],[non,"Not a member"],[none,"Not in Insightly"]];
+  $("statusBar").innerHTML=parts.filter(p=>p[0]).map(([v,s])=>`<i style="width:${v/n*100}%;background:var(${ST.find(x=>x[0]===s)[2]})" title="${esc(s)}: ${v}"></i>`).join("");
+  $("statusBar").setAttribute("aria-label",parts.map(([v,s])=>`${s} ${v}`).join(", "));
+  $("statusLegend").innerHTML=parts.map(([v,s])=>`<span><i style="background:var(${ST.find(x=>x[0]===s)[2]})"></i>${esc(s)} <b>${fmt(v)}</b> <span class="muted">${pct(v/n)}</span></span>`).join("");
+  bars($("typeBars"),byStatus(P,p=>p.business_type?typeLabel(p.business_type):p.org_id?"Not recorded in Insightly":"Unknown (not in Insightly)"),{share:n});
+  bars($("sectorBars"),byStatus(P,p=>p.sector?p.sector.split(", "):[p.org_id?"Not recorded in Insightly":"Unknown (not in Insightly)"],true),{share:n});
+  bars($("catBars"),byStatus(P,p=>p.reg_category||"Not given"),{share:n});
+  bars($("provBars"),byStatus(P,p=>p.province||"Not given"),{share:n});
+  bars($("wdBars"),byStatus(P.filter(p=>p.wd_affiliation),p=>p.wd_affiliation));
+  bars($("segBars"),byStatus(P.filter(p=>p.member_status==="Member"),p=>p.segment||"Not recorded"));
+}
+
+/* ---------- companies ---------- */
+function companies(){
+  const m=new Map();
+  for(const p of S.people){
+    const key=p.org_id?"o"+p.org_id:"n"+String(p.company||"(no company given)").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const c=m.get(key)||{name:p.org_name||p.company||"(no company given)",given:new Set(),status:p.member_status,type:p.business_type,sector:p.sector,wd:p.wd_affiliation,icar:p.icar,segment:p.segment,last:p.member_last_year,via:p.via_parent,poss:false,n:0,chk:0,people:[]};
+    c.n++;if(p.checked_in)c.chk++;if(p.company&&p.company!==c.name)c.given.add(p.company);if(p.match_confidence==="possible")c.poss=true;c.people.push(p);m.set(key,c);
+  }
+  return [...m.values()];
+}
+const sortBy=(arr,[k,dir])=>arr.sort((a,b)=>{const x=a[k]??"",y=b[k]??"";return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*dir||(b.n??0)-(a.n??0)});
+function segButtons(host,cur,onPick){
+  const opts=[["all","All"],["Member","Members"],["Lapsed member","Lapsed"],["other","Non-members"]];
+  host.innerHTML=opts.map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${k===cur}">${l}</button>`).join("");
+  host.querySelectorAll("button").forEach(b=>b.onclick=()=>onPick(b.dataset.k));
+}
+const passStatus=(s,f)=>f==="all"||(f==="other"?(s==="Not a member"||s==="Not in Insightly"):s===f);
+function renderCompanies(){
+  const all=companies(),q=$("coQ").value.trim().toLowerCase();
+  let cos=all.filter(c=>passStatus(c.status,S.coFilter)&&(!q||(c.name+" "+[...c.given].join(" ")).toLowerCase().includes(q)));
+  sortBy(cos,S.sort.co);
+  $("coLead").textContent=`${fmt(all.length)} companies. Names are as recorded in Insightly; what attendees typed is shown underneath when it differs.`;
+  const H=[["name","Company"],["status","Membership"],["type","Business type"],["sector","Sector"],["wd","WD affiliation"],["icar","I-CAR"],["n","Attendees"],["chk","Checked in"]];
+  const sk=S.sort.co;
+  $("coTbl").innerHTML=`<thead><tr>${H.map(([k,l])=>`<th data-k="${k}" class="${k==="n"||k==="chk"?"num":""}" ${sk[0]===k?`aria-sort="${sk[1]>0?"ascending":"descending"}"`:""}>${l}</th>`).join("")}</tr></thead><tbody>`+
+    (cos.length?cos.map(c=>`<tr><td><b>${esc(c.name)}</b>${c.given.size?`<div class="small muted">${esc([...c.given].slice(0,3).join(" · "))}</div>`:""}${c.via?`<div class="small muted">Member through ${esc(c.via)}</div>`:""}</td><td>${stPill(c.status)}${c.status==="Lapsed member"&&c.last?`<div class="small muted">Last member ${c.last}</div>`:""}${c.poss?` <span class="pill poss">Check match</span>`:""}</td><td>${esc(c.type?typeLabel(c.type):"–")}</td><td>${esc(c.sector||"–")}</td><td>${esc(c.wd||"–")}</td><td>${esc(c.icar||"–")}</td><td class="num">${fmt(c.n)}</td><td class="num">${S.people.some(p=>p.checked_in!=null)?fmt(c.chk):"–"}</td></tr>`).join(""):`<tr><td colspan="8" class="empty">No companies match.</td></tr>`)+"</tbody>";
+  $("coTbl").querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort.co=[k,S.sort.co[0]===k?-S.sort.co[1]:(k==="n"||k==="chk"?-1:1)];renderCompanies()});
+}
+function renderFollow(){
+  const cos=companies();
+  const lap=sortBy(cos.filter(c=>c.status==="Lapsed member"),["last",-1]);
+  const pro=sortBy(cos.filter(c=>c.status==="Not a member"||c.status==="Not in Insightly"),["n",-1]).slice(0,60);
+  const t=(rows,cols)=>rows.length?`<thead><tr>${cols.map(c=>`<th class="${c[2]||""}">${c[0]}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td class="${c[2]||""}">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody>`:'<tbody><tr><td class="empty">None at this event.</td></tr></tbody>';
+  $("lapsedTbl").innerHTML=t(lap,[["Company",c=>`<b>${esc(c.name)}</b><div class="small muted">${esc([c.type&&typeLabel(c.type),c.sector].filter(Boolean).join(" · "))}</div>`],["Last member",c=>c.last||"–","num"],["Attendees",c=>fmt(c.n),"num"]]);
+  $("prospTbl").innerHTML=t(pro,[["Company",c=>`<b>${esc(c.name)}</b><div class="small muted">${esc([c.type&&typeLabel(c.type),c.sector,c.status==="Not in Insightly"?"not in Insightly yet":""].filter(Boolean).join(" · "))}</div>`],["Attendees",c=>fmt(c.n),"num"]]);
+}
+
+/* ---------- attendees ---------- */
+function filteredPeople(){
+  const q=$("pQ").value.trim().toLowerCase(),poss=$("pPoss").checked,chk=$("pChk").checked;
+  const list=S.people.filter(p=>passStatus(p.member_status,S.pFilter)&&(!poss||p.match_confidence==="possible")&&(!chk||p.checked_in)&&(!q||[p.first_name,p.last_name,p.company,p.org_name,p.title].join(" ").toLowerCase().includes(q))).map(p=>({...p,name:`${p.last_name||""}, ${p.first_name||""}`}));
+  const [k,dir]=S.sort.p;return list.sort((a,b)=>String(a[k]??"").localeCompare(String(b[k]??""))*dir||String(a.last_name).localeCompare(String(b.last_name)));
+}
+function renderPeople(){
+  const list=filteredPeople(),hasChk=S.people.some(p=>p.checked_in!=null);
+  $("pChkWrap").hidden=!hasChk;
+  $("pLead").textContent=`${fmt(list.length)} of ${fmt(S.people.length)} attendees shown. "Check match" marks a company matched by a similar name or a shared franchise email domain: worth a glance before acting on it.`;
+  const H=[["name","Name"],["title","Title"],["company","Company"],["member_status","Membership"],["business_type","Business type"],["sector","Sector"],["reg_category","Registration"],["province","Prov."]].concat(hasChk?[["checked_in","Checked in"]]:[]);
+  const sk=S.sort.p;
+  $("pTbl").innerHTML=`<thead><tr>${H.map(([k,l])=>`<th data-k="${k}" ${sk[0]===k?`aria-sort="${sk[1]>0?"ascending":"descending"}"`:""}>${l}</th>`).join("")}</tr></thead><tbody>`+
+    (list.length?list.slice(0,2000).map(p=>`<tr><td><b>${esc([p.first_name,p.last_name].filter(Boolean).join(" ")||"–")}</b>${p.email?`<div class="small"><a href="mailto:${esc(p.email)}">${esc(p.email)}</a></div>`:""}</td><td>${esc(p.title||"–")}</td><td>${esc(p.company||"–")}${p.org_name&&p.org_name!==p.company?`<div class="small muted">Insightly: ${esc(p.org_name)}</div>`:""}</td><td>${stPill(p.member_status)}${p.match_confidence==="possible"?` <span class="pill poss">Check match</span>`:""}</td><td>${esc(p.business_type?typeLabel(p.business_type):"–")}</td><td>${esc(p.sector||"–")}</td><td>${esc(p.reg_category||"–")}</td><td>${esc(p.province||"–")}</td>${hasChk?`<td>${p.checked_in?"Yes":"No"}</td>`:""}</tr>`).join(""):`<tr><td colspan="${H.length}" class="empty">No attendees match.</td></tr>`)+"</tbody>";
+  $("pTbl").querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort.p=[k,S.sort.p[0]===k?-S.sort.p[1]:1];renderPeople()});
+}
+function renderNotes(){
+  const T=S.report.totals,M=T.method||{},n=S.people.length;
+  const rows=[["Contact in Insightly","The attendee's email is a contact in Insightly, linked to a company"],["Email domain","The email's company domain belongs to one company in Insightly (marked \"check\" when the names look different)"],["Email domain and name","Several companies share the domain; the company name decided"],["Company name","The company name matches an Insightly company"],["Similar company name","The company name is close to an Insightly company (check)"],["Shared email domain","A franchise domain shared by many locations; the network's head office or member location was used (check)"],["Franchise location not in Insightly","The email is a franchise network's, but this location isn't in Insightly"],["No match","Not found in Insightly"]];
+  $("notesBody").innerHTML=`<p>Each attendee is matched to a company in Insightly, then that company's membership (Last Membership Year ≥ ${S.report.member_year}, or lifetime), business type, sector, size segment, WD affiliation and I-CAR status are used. A location whose head office is a member counts as a member. <b>Lapsed</b> means the company was a member in an earlier year.</p>
+  <div class="tblwrap" style="margin-top:8px"><table style="min-width:520px"><thead><tr><th>How the match was made</th><th class="num">Attendees</th><th class="num">Share</th></tr></thead><tbody>${rows.filter(r=>M[r[0]]).map(([k,d])=>`<tr><td><b>${esc(k)}</b><div class="muted">${esc(d)}</div></td><td class="num">${fmt(M[k])}</td><td class="num">${pct(M[k]/n)}</td></tr>`).join("")}</tbody></table></div>
+  <p>${fmt(T.generic_email)} attendees used a personal email (Gmail, Hotmail, etc.), so only their company name could be used. To improve matching, add missing companies to Insightly, or fill in their website, and rebuild the report from the Upload data page.</p>`;
+}
+
+/* ---------- CSV ---------- */
+function downloadCSV(){
+  const cols=[["First name","first_name"],["Last name","last_name"],["Email","email"],["Title","title"],["Company (as given)","company"],["Company in Insightly","org_name"],["Membership","member_status"],["Last membership year","member_last_year"],["Member through","via_parent"],["Business type","business_type"],["Sector","sector"],["Segment","segment"],["WD affiliation","wd_affiliation"],["I-CAR","icar"],["Registration type","reg_category"],["Province","province"],["Checked in","checked_in"],["Match","match_method"],["Match confidence","match_confidence"]];
+  const q=v=>{const s=v==null?"":String(v);return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s};
+  const csv="﻿"+[cols.map(c=>c[0]).join(","),...S.people.map(p=>cols.map(c=>q(c[1]==="checked_in"?(p.checked_in==null?"":p.checked_in?"Yes":"No"):p[c[1]])).join(","))].join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`${(S.ev.name||"event").replace(/[^\w\- ]+/g,"").trim()} attendees.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ---------- boot ---------- */
+async function open(code){
+  S.code=code;const u=new URL(location.href);u.searchParams.set("event",code);history.replaceState(null,"",u);
+  S.ev=S.events.find(e=>e.code===code);
+  $("evTitle").textContent=S.ev?S.ev.name:"Event attendee report";
+  $("evSub").textContent=S.ev?[dLong(S.ev.start_date)+(S.ev.end_date&&S.ev.end_date!==S.ev.start_date?" – "+dLong(S.ev.end_date):""),S.ev.location].filter(Boolean).join(" · "):"";
+  if(!S.pass){$("lockCard").hidden=false;$("report").hidden=true;return}
+  try{const r=await call({action:"get",event_code:code});S.report=r.report;S.people=r.people||[];}
+  catch(e){if(e.status===401){S.pass=null;$("lockCard").hidden=false;$("report").hidden=true;$("lockErr").textContent="That passcode isn't right.";return}
+    $("report").hidden=true;$("lockCard").hidden=false;$("lockCard").innerHTML=`<h2>No report yet</h2><p class="lead">${esc(e.message)} Build one on the <a href="upload.html#reportCard">Upload data page</a>.</p>`;return}
+  $("lockCard").hidden=true;$("report").hidden=false;$("csvBtn").hidden=false;$("pdfBtn").hidden=false;
+  document.title=`${S.ev?S.ev.name:"Event"} · Attendee report`;
+  renderGlance();renderWho();renderFollow();
+  segButtons($("coSeg"),S.coFilter,function f(k){S.coFilter=k;segButtons($("coSeg"),k,f);renderCompanies()});
+  segButtons($("pSeg"),S.pFilter,function f(k){S.pFilter=k;segButtons($("pSeg"),k,f);renderPeople()});
+  renderCompanies();renderPeople();renderNotes();
+}
+(async function boot(){
+  try{
+    const [events,snaps,reports]=await Promise.all([rest("events","select=*"),rest("event_snapshots","select=event_code,period,registrations,revenue,attendance,orders,orders_paid,orders_free,orders_owing,orders_incomplete,amount_owing,tickets_sold,ticket_revenue,tickets_comp,tickets_sponsor,tickets_sponsor_comp"),rest("event_reports","select=event_code,built_at,totals,member_year,source")]);
+    Object.assign(S,{events,snaps,reports});
+  }catch(e){$("lockCard").innerHTML='<p class="err">The report data didn\'t load. Refresh in a minute.</p>';return}
+  const withR=S.reports.map(r=>S.events.find(e=>e.code===r.event_code)).filter(Boolean).sort((a,b)=>b.start_date.localeCompare(a.start_date));
+  if(!withR.length){$("lockCard").innerHTML='<h2>No attendee reports yet</h2><p class="lead">Build the first one on the <a href="upload.html#reportCard">Upload data page</a>: choose the event, then pull the attendee list from PheedLoop or upload PheedLoop\'s attendee report.</p>';$("evSel").hidden=true;return}
+  $("evSel").innerHTML=withR.map(e=>`<option value="${e.code}">${esc(e.name)} · ${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",year:"numeric"})}</option>`).join("");
+  const want=new URL(location.href).searchParams.get("event");
+  const code=withR.some(e=>e.code===want)?want:withR[0].code;$("evSel").value=code;
+  $("evSel").onchange=e=>open(e.target.value);
+  S.pass=store.get();
+  if(S.pass){try{const c=await call({action:"check"});if(!c.ok)S.pass=null}catch(e){S.pass=null}}
+  $("lockForm").onsubmit=async ev=>{ev.preventDefault();S.pass=$("pass").value.trim();$("lockErr").textContent="";
+    try{const c=await call({action:"check"});if(!c.ok)throw new Error();store.set(S.pass);open(S.code)}catch(e){S.pass=null;$("lockErr").textContent="That passcode isn't right."}};
+  ["coQ"].forEach(id=>$(id).addEventListener("input",renderCompanies));
+  ["pQ","pPoss","pChk"].forEach(id=>$(id).addEventListener("input",renderPeople));
+  $("csvBtn").onclick=downloadCSV;
+  $("pdfBtn").onclick=()=>window.print();
+  open(code);
+})();
+</script>
+</body>
+</html>

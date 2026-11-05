@@ -320,6 +320,8 @@ html{scroll-behavior:smooth}
 .src.link{text-decoration:none;border-style:dashed;color:var(--s1)}
 .muted{color:var(--muted)}
 .sbreak{margin-top:10px;font-size:13px;display:grid;gap:6px}.sbreak>div{display:grid;grid-template-columns:88px 1fr;gap:8px;align-items:baseline}.sbreak>div>b{color:var(--ink-2);font-weight:600}.sbreak .its{display:flex;flex-wrap:wrap;gap:2px 14px}
+#whoTable td.small{font-size:12px;color:var(--ink-2)}
+.whobar{display:flex;height:10px;border-radius:4px;overflow:hidden;background:var(--wash);margin-bottom:4px}.whobar i{display:block;height:100%}.whobar i+i{border-left:1.5px solid var(--surface)}
 </style>
 </head>
 <body id="top">
@@ -391,6 +393,7 @@ html{scroll-behavior:smooth}
     <div class="card" id="sponsCard"><h3>Sponsorship revenue by event <span class="sub" id="spSub"></span></h3><div class="spons" id="spons"></div>
       <div class="legend"><span><i class="sw" style="--c:var(--s1)"></i>Invoiced this year</span><span><i style="--c:var(--ink-2);width:2px;height:12px;border-radius:1px"></i>Last year, same event</span></div><p class="note" id="spNote"></p></div>
     <div class="card"><h3 id="yrEvH">Every event this year</h3><div class="tblwrap"><table class="mini" id="yrEvTable"></table></div><p class="note" id="yrEvNote"></p></div>
+    <div class="card" id="whoCard"><h3>Who attended <span class="sub">· attendees matched to their company in Insightly</span></h3><div class="tblwrap"><table class="mini" id="whoTable"></table></div><p class="note">Membership is the company's status in Insightly for the event's year. <a href="report.html">Open the full attendee reports</a> (passcode needed) for every company and person, follow-up lists and business-type breakdowns. Build a report on the <a href="upload.html#reportCard">Upload data page</a>.</p></div>
   </section>
 
   <section class="stream" id="membership" aria-labelledby="mbH">
@@ -1073,6 +1076,22 @@ function renderYearEvents(){
   $("yrEvNote").innerHTML=`Registrations and revenue come from PheedLoop every hour (revenue = amount charged incl. tax, less anything still owing; registrations use the highest count reported). PheedLoop only has attendance when people are checked in at the door, so attendance can be entered on the <a href="upload.html#attendanceCard">Upload month page</a>. ${TIX_NOTE}${noRev.length||noAtt.length?` <b>Missing:</b> ${[noRev.length?`revenue for ${noRev.map(e=>D.short[e.code]||e.name).join(", ")}`:"",noAtt.length?`attendance for ${noAtt.map(e=>D.short[e.code]||e.name).join(", ")}`:""].filter(Boolean).join("; ")}.`:""}`;
 }
 
+/* ---------- who attended (totals from event attendee reports) ---------- */
+const WHO_ST=[["Member","--s1"],["Lapsed member","--s4"],["Not a member","--s2"],["Not in Insightly","--axis"]];
+function renderWho(){
+  const host=$("whoTable");if(!host)return;
+  const rows=(D.reports||[]).map(r=>({r,e:D.events.find(e=>e.code===r.event_code)})).filter(x=>x.e).sort((a,b)=>b.e.start_date.localeCompare(a.e.start_date));
+  if(!rows.length){host.innerHTML='<tbody><tr><td class="empty-note">No attendee reports yet. Build one on the <a href="upload.html#reportCard">Upload data page</a> (one click pulls the attendee list from PheedLoop).</td></tr></tbody>';return}
+  const topOf=(o,skip)=>Object.entries(o||{}).filter(([k])=>!skip.test(k)).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const TL={"Automotive Service Provider":"Shops","Wholesaler":"Wholesalers","Warehouse Distributor":"WDs","Manufacturer":"Manufacturers","Major Retailers":"Retailers","Strategic Business Partners":"Business partners","Industry Engagement Network affiliate":"IEN affiliates"};
+  host.innerHTML=`<thead><tr><th>Event</th><th class="num">People</th><th style="min-width:200px">Membership</th><th class="num">Member share</th><th>Top business types</th><th>Sector</th><th></th></tr></thead><tbody>`+rows.map(({r,e})=>{
+    const T=r.totals||{},n=T.attendees||0,st=T.status||{},m=st["Member"]||0;
+    const bar=WHO_ST.filter(([k])=>st[k]).map(([k,c])=>`<i style="width:${st[k]/n*100}%;background:var(${c})" title="${esc(k)}: ${st[k]}"></i>`).join("");
+    const types=topOf(T.type,/^(Not recorded|Unknown|Other)/).map(([k,v])=>`${esc(TL[k]||k)} ${fmt(v)}`).join(" · ")||"–";
+    const sec=["Mechanical","Collision","Tire"].filter(k=>(T.sector||{})[k]).map(k=>`${k} ${fmt(T.sector[k])}`).join(" · ")||"–";
+    return `<tr><td><b>${esc(e.name)}</b><div class="evmeta">${new Date(e.start_date+"T12:00:00").toLocaleDateString("en-CA",{month:"short",day:"numeric",year:"numeric"})}${T.checked_in?` · ${fmt(T.checked_in)} checked in`:""}</div></td><td class="num">${fmt(n)}</td><td><div class="whobar">${bar}</div><div class="evmeta">${fmt(m)} member · ${fmt(st["Lapsed member"]||0)} lapsed · ${fmt((st["Not a member"]||0)+(st["Not in Insightly"]||0))} non-member</div></td><td class="num"><b>${n?pct(m/n,0):"–"}</b><div class="evmeta">${fmt(T.member_companies)} of ${fmt(T.companies)} companies</div></td><td class="small">${types}</td><td class="small">${sec}</td><td><a href="report.html?event=${e.code}">Full report →</a></td></tr>`}).join("")+"</tbody>";
+}
+
 /* ---------- eBlast send plan (live) ---------- */
 function summarizeEblast(data){
   if(!data||!data.sends)return null;
@@ -1194,7 +1213,7 @@ function renderSponsorship(){
 
 /* ---------- state & boot ---------- */
 const state={month:null,brand:"",view:"month"};
-function render(){VIEW=state.view;YTD=VIEW!=="month";$("vMonth").setAttribute("aria-pressed",VIEW==="month");$("vQtr").setAttribute("aria-pressed",VIEW==="quarter");$("vYtd").setAttribute("aria-pressed",VIEW==="ytd");fillSel();renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes();renderBrief()}
+function render(){VIEW=state.view;YTD=VIEW!=="month";$("vMonth").setAttribute("aria-pressed",VIEW==="month");$("vQtr").setAttribute("aria-pressed",VIEW==="quarter");$("vYtd").setAttribute("aria-pressed",VIEW==="ytd");fillSel();renderCoverage();renderKPIs();renderTargets();renderMarketing();renderComms();renderEvents();renderYearEvents();renderWho();renderDiscipline();renderMembership();renderSponsorship();renderMonthNotes();renderBrief()}
 function watchJump(){
   // Highlight the last section whose top has scrolled past the jump bar.
   const links=[...document.querySelectorAll("#jump a:not(.totop)")];
@@ -1221,6 +1240,7 @@ async function boot(){
     try{D.targets=await rest("targets","select=year,stream,source,metric,dimension,target,better")}catch(e){D.targets=[]}
     try{D.notes=await rest("month_notes","select=period,topic,note")}catch(e){D.notes=[]}
     try{D.spons=await rest("sponsorship_totals","select=year,program,level,deals,invoiced,paid_deals,paid")}catch(e){D.spons=[]}
+    try{D.reports=await rest("event_reports","select=event_code,built_at,totals,member_year")}catch(e){D.reports=[]}
     try{D.briefs=await rest("briefs","select=period,subject,body_md,approved_at&order=period.desc")}catch(e){D.briefs=[]}
     try{const sl=await rest("sync_log","select=started_at,finished_at,ok&source=eq.pheedloop&ok=eq.true&order=started_at.desc&limit=1");D.sync=sl[0]||null}catch(e){D.sync=null}
     try{const last=await rest("member_snap","select=as_of,year&order=as_of.desc&limit=1");
